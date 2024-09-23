@@ -6,7 +6,8 @@ from pdfminer.high_level import extract_text
 from openai import OpenAI
 
 # Replace this with your actual OpenAI API key
-client = OpenAI(api_key="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")
+client = OpenAI(api_key="sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e
+)
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
