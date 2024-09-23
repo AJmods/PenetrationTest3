@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Welcome, {{ username }}!</h1>
+        <div class="top-buttons">
+            <a href="{{ url_for('profile') }}" class="btn">Profile</a>
+            <a href="{{ url_for('history') }}" class="btn">History</a>
+            <a href="{{ url_for('logout') }}" class="btn">Logout</a>
+        </div>
+    </header>
+
+    <!-- File Upload Section -->
+    <section class="file-upload-section">
+        <h2>Upload Pentest Report</h2>
+        <div id="drop-area">
+            <form id="upload-form" class="upload-form" action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="fileElem" name="pentest_file" accept=".txt,.pdf,.xml,.html" onchange="handleFiles(this.files)">
+                <label class="file-drop-label" for="fileElem">Drag & Drop your file here or click to select</label>
+                <button id="uploadBtn" type="submit" class="submit-btn" disabled>Upload and Analyze</button>
+            </form>
+        </div>
+
+        <!-- Progress Bar -->
+        <div id="progress-container" style="display: none;">
+            <div id="progress-bar">
+                <div id="progress-fill"></div>
+            </div>
+            <p id="time-remaining"></p>
+        </div>
+    </section>
+
+    <!-- CVE Results Section -->
+    <section class="cve-results" style="display: none;">
+        <h2>Extracted CVEs</h2>
+        <ul id="cve-list"></ul>
+    </section>
+
+    <!-- ChatGPT Analysis Section -->
+    <section class="chatgpt-analysis" style="display: none;">
+        <h2>AI Analysis</h2>
+        <p id="analysis-text"></p>
+    </section>
+
+    <script>
+        let uploadForm = document.getElementById("upload-form");
+        let uploadBtn = document.getElementById("uploadBtn");
+        let progressContainer = document.getElementById("progress-container");
+        let progressBar = document.getElementById("progress-bar");
+        let progressFill = document.getElementById("progress-fill");
+        let timeRemaining = document.getElementById("time-remaining");
+        let cveResultsSection = document.querySelector('.cve-results');
+        let analysisSection = document.querySelector('.chatgpt-analysis');
+
+        let startTime;
+        let totalSize;
+
+        function handleFiles(files) {
+            uploadBtn.disabled = false;  // Enable button when file is selected
+        }
+
+        uploadForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            uploadBtn.disabled = true;
+
+            let fileElem = document.getElementById("fileElem").files[0];
+            if (!fileElem) {
+                return;
+            }
+
+            totalSize = fileElem.size;
+            startTime = new Date().getTime();
+
+            let formData = new FormData(uploadForm);
+            progressContainer.style.display = "block";
+
+            let xhr = new XMLHttpRequest();
+            xhr.open("POST", uploadForm.action, true);
+
+            xhr.upload.onprogress = function (event) {
+                let percentComplete = Math.round((event.loaded / event.total) * 100);
+                progressFill.style.width = percentComplete + "%";
+
+                // Calculate remaining time
+                let elapsedTime = (new Date().getTime() - startTime) / 1000; // seconds
+                let uploadSpeed = event.loaded / elapsedTime; // bytes per second
+                let remainingTime = (totalSize - event.loaded) / uploadSpeed; // seconds remaining
+                timeRemaining.textContent = `Time remaining: ${Math.round(remainingTime)} seconds`;
+            };
+
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    progressFill.style.width = "100%";
+                    timeRemaining.textContent = "Upload complete!";
+
+                    // Parse the response and display CVEs and ChatGPT analysis
+                    let responseData = JSON.parse(xhr.responseText);
+                    if (responseData.cves && responseData.analysis) {
+                        displayResults(responseData.cves, responseData.analysis);
+                    }
+                } else {
+                    timeRemaining.textContent = "Error during upload!";
+                }
+            };
+
+            xhr.onerror = function () {
+                timeRemaining.textContent = "Upload failed!";
+            };
+
+            xhr.send(formData);
+        });
+
+        function displayResults(cves, analysis) {
+            // Show the CVE results section
+            cveResultsSection.style.display = "block";
+            let cveList = document.getElementById('cve-list');
+            cveList.innerHTML = '';
+
+            cves.forEach(function (cve) {
+                cveList.innerHTML += `<li>${cve.id}: ${cve.description} (Category: ${cve.category})</li>`;
+            });
+
+            // Show the ChatGPT analysis section
+            analysisSection.style.display = "block";
+            document.getElementById('analysis-text').textContent = analysis;
+        }
+    </script>
+</body>
+</html>
+

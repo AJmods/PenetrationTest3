@@ -1,0 +1,131 @@
+/* Global styles */
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #EDD9CC;
+    color: #333;
+}
+
+h1, h2 {
+    color: #B20808;
+}
+
+a {
+    text-decoration: none;
+    color: #8B0909;
+}
+
+/* Container */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+header {
+    background-color: #8B0909;
+    padding: 15px 0;
+    color: #EDD9CC;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.top-buttons {
+    margin-top: 10px;
+}
+
+.top-buttons a {
+    background-color: #EDD9CC;
+    padding: 10px 20px;
+    border-radius: 25px;
+    color: #8B0909;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+.top-buttons a:hover {
+    background-color: #333;
+    color: #EDD9CC;
+}
+
+/* File Upload Section */
+.file-upload-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.upload-form {
+    background-color: #EDD9CC;
+    border: 2px dashed #8B0909;
+    padding: 20px;
+    border-radius: 10px;
+    display: inline-block;
+    width: 100%;
+    max-width: 600px;
+}
+
+.upload-form input[type="file"] {
+    display: none;
+}
+
+.file-drop-label {
+    font-size: 18px;
+    padding: 15px;
+    color: #4A90E2;
+    cursor: pointer;
+}
+
+.submit-btn {
+    background-color: #4A90E2;
+    color: #8B0909;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 25px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.submit-btn:hover {
+    background-color: #333;
+}
+
+.progress-container {
+    display: none;
+    margin: 20px auto;
+    width: 100%;
+    max-width: 600px;
+}
+
+.progress-bar {
+    height: 30px;
+    background-color: #4A90E2;
+    width: 0%;
+    border-radius: 5px;
+    text-align: center;
+    line-height: 30px;
+    color: white;
+}
+
+/* CVE Results Section */
+.cve-results ul {
+    list-style: none;
+    padding: 0;
+}
+
+.cve-results li {
+    background-color: #e0f7fa;
+    margin: 10px 0;
+    padding: 10px;
+    border-left: 5px solid #4A90E2;
+}
+
+/* ChatGPT Analysis */
+.chatgpt-analysis p {
+    background-color: #f7f7f7;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
