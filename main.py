@@ -4,12 +4,20 @@ import sqlite3
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from pdfminer.high_level import extract_text
 from openai import OpenAI
+from dotenv import load_dotenv  # New import to load environment variables
 
-# Replace this with your actual OpenAI API key
-client = OpenAI(api_key="test ur nuts"
-)
-#sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e
+# Load environment variables from .env file
+load_dotenv()  # New line to load environment variables
 
+# Access the API key from the environment variable
+openai_api_key = os.getenv("OPENAI_API_KEY")  # Fetch API key from environment
+
+# Check if the API key is present
+if not openai_api_key:
+    raise ValueError("API Key not found. Ensure that OPENAI_API_KEY is set in the .env file.")  # Error handling if API key is missing
+
+# Initialize OpenAI client with the API key
+client = OpenAI(api_key=openai_api_key)  # Use the environment variable API key
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'

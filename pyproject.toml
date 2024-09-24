@@ -9,6 +9,7 @@ python = ">=3.10.0,<3.12"
 flask = "^3.0.3"
 pdfminer = "^20191125"
 openai = "^1.45.1"
+python-dotenv = "^1.0.1"
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
