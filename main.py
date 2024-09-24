@@ -1,7 +1,7 @@
 import os
 import re
 import sqlite3
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
 from openai import OpenAI
 from dotenv import load_dotenv  # Corrected import to load environment variables
@@ -85,24 +85,23 @@ def dashboard():
         flash('You are not logged in.', 'error')
         return redirect(url_for('index'))
 
+from flask import jsonify
+
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
-    print("Uploading file...")
-    if 'username' not in session:
-        flash('You are not logged in.', 'error')
-        return redirect(url_for('index'))
+    try:
+        print("Uploading file...")
+        if 'username' not in session:
+            return jsonify({'error': 'You are not logged in.'}), 401
 
-    if 'pentest_file' not in request.files:
-        flash('No file part', 'error')
-        return redirect(url_for('dashboard'))
+        if 'pentest_file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
 
-    file = request.files['pentest_file']
-    if file.filename == '':
-        flash('No selected file', 'error')
-        return redirect(url_for('dashboard'))
+        file = request.files['pentest_file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
 
-    if file:
-        filename = os.path.join(app.config['UPLOAD_FOLDER'], str(file.filename))
+        filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(filename)
 
         # Extract CVEs from the file
@@ -115,7 +114,13 @@ def upload_file():
         # Get ChatGPT analysis of the CVEs
         analysis = get_chatgpt_analysis(cves)
 
-        return render_template('dashboard.html', username=session['username'], cves=categorized_cves, analysis=analysis)
+        return jsonify({'cves': categorized_cves, 'analysis': analysis})
+
+    except Exception as e:
+        # Log the error and return a JSON error response
+        print(f"Error during file upload: {e}")
+        return jsonify({'error': 'An error occurred during file processing.'}), 500
+
 
 # Function to extract CVEs from PDF or text file
 def extract_cves(filepath):
@@ -168,7 +173,7 @@ def get_chatgpt_analysis(cves):
     if not cves:
         return "No CVEs found in the report."
 
-    prompt = f"The following CVEs were extracted from a pentest report:\n{', '.join(cves)}. Can you provide detailed analysis of these CVEs including their description, systems affected, severity rating, and how to remediate them (cost estimate and profession needed)?"
+    prompt = f"The following CVEs were extracted from a pentest report:\n{', '.join(cves)}. Make a table for each CVE with the following columns: ID, Description, Category, Severity, Remediation Plan, Cost Estimate, Professional Needed. Then, provide a detailed analysis of each CVE, including the impact, risk, and mitigation steps." 
 
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
