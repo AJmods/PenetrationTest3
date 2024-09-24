@@ -4,7 +4,7 @@ import sqlite3
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from pdfminer.high_level import extract_text
 from openai import OpenAI
-from dotenv import load_dotenv  # New import to load environment variables
+from dotenv import load_dotenv  # Corrected import to load environment variables
 
 # Load environment variables from .env file
 load_dotenv()  # New line to load environment variables
@@ -102,7 +102,7 @@ def upload_file():
         return redirect(url_for('dashboard'))
 
     if file:
-        filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        filename = os.path.join(app.config['UPLOAD_FOLDER'], str(file.filename))
         file.save(filename)
 
         # Extract CVEs from the file
