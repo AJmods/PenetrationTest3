@@ -169,11 +169,12 @@ def store_in_database(cves):
     conn.close()
 
 # Function to get ChatGPT analysis of CVEs
+
 def get_chatgpt_analysis(cves):
     if not cves:
         return "No CVEs found in the report."
 
-    prompt = f"The following CVEs were extracted from a pentest report:\n{', '.join(cves)}. Make a table for each CVE with the following columns: ID, Description, Category, Severity, Remediation Plan, Cost Estimate, Professional Needed. Then, provide a detailed analysis of each CVE, including the impact, risk, and mitigation steps." 
+    prompt = f"The following CVEs were extracted from a pentest report:\n{', '.join(cves)}. Output the following information, the CVE, Description of the CVE, Please give me a risk estimation, cost to fix estimate in dollars, and Time to Fix. Don't include any pleasantries"
 
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
@@ -183,8 +184,30 @@ def get_chatgpt_analysis(cves):
         ],
         max_tokens=500
     )
+    cve_analysis_array = response.choices[0].message.content.split('\n')
 
-    return response.choices[0].message.content
+    return cve_analysis_array
+
+# cve_data_list = []
+
+# for cve_entry in cve_analysis_array:
+#     # Use regex to extract the relevant parts for each CVE
+#     cve_id = re.search(r'CVE-\d{4}-\d{4,7}', cve_entry)
+#     cve_description = re.search(r'Description of CVE:\s*(.*)', cve_entry)
+#     cost_to_fix = re.search(r'Cost to Fix CVE:\s*(.*)', cve_entry)
+#     risk_rate = re.search(r'Risk Rate:\s*(high|medium|low)', cve_entry)
+#     time_to_fix = re.search(r'Time to fix:\s*(.*)', cve_entry)
+
+#     # Store each CVE's details in a dictionary
+#     cve_data = {
+#         'CVE_ID': cve_id.group(0) if cve_id else None,
+#         'CVE_Description': cve_description.group(1) if cve_description else None,
+#         'Cost_to_Fix': cost_to_fix.group(1) if cost_to_fix else None,
+#         'Risk_Rate': risk_rate.group(1) if risk_rate else None,
+#         'Time_to_Fix': time_to_fix.group(1) if time_to_fix else None
+#     }
+
+
 
 @app.route('/logout')
 def logout():
