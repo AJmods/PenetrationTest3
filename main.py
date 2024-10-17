@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
 from openai import OpenAI
@@ -108,8 +109,13 @@ def upload_file():
         cves = extract_cves(filename)
         categorized_cves = categorize_cves(cves)
 
+        print("extracting vuls")
+
+        #vuls = extractVulnerabilities(filename)
+       # print(vuls)
+
         # Store vulnerabilities in the database
-        store_in_database(categorized_cves)
+        #store_in_database(categorized_cves)
 
         # Get ChatGPT analysis of the CVEs
         analysis = get_chatgpt_analysis(cves)
@@ -208,6 +214,34 @@ def get_chatgpt_analysis(cves):
 #     }
 
 
+
+
+def extractVulnerabilities(filepath):
+    vulnerabilities = []
+
+    # Open and read the PDF file
+    report_text = extract_from_pdf(filepath) if filepath.endswith('.pdf') else extract_from_txt(filepath)
+
+    # Prepare the messages for GPT-4 chat format
+    messages = [
+        {"role": "system",
+         "content": "You are a cybersecurity assistant. Your task is to extract all vulnerabilities from a given PenTest report."},
+        {"role": "user",
+         "content": f"Here is the PenTest report:\n\n{report_text}\n\nPlease extract and list all vulnerabilities."}
+    ]
+
+    # Use OpenAI's ChatCompletion API to extract vulnerabilities
+    response = client.chat.completions.create(
+        model="gpt-4",  # Use the appropriate model
+        messages=messages,
+        max_tokens=1500,  # Adjust based on report size
+        temperature=0.3
+    )
+
+    vulnerabilities_text = response['choices'][0]['message']['content']
+    vulnerabilities = vulnerabilities_text.strip().split('\n')
+
+    return vulnerabilities
 
 @app.route('/logout')
 def logout():
