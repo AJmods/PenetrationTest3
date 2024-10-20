@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZEBRA Registration</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  </head>
+
+  <body>
+    <header id="signuphead">
+      <h1>ZEBRA</h1>
+    </header>
+    <main>
+      <form id="signupform" method="post" action="/register">
+        <input id="supInput" type="text" name="First" placeholder="First name" required>
+        <input id="supInput" type="text" name="Last" placeholder="Last name" required>
+        <input id="supInput" type="text" name="Email" placeholder="Email" required>
+        <input id="supInput" type="password" name="Password" placeholder="Password" required>
+        <input id="supInput" type="submit" value="Done">
+      </form>
+    </main>
+    <footer>
+      <p>Last update: 10/17/2024</p>
+    </footer>
+  </body>
+</html>

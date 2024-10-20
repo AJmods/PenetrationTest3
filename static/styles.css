@@ -79,7 +79,6 @@ header {
 
 .submit-btn {
     background-color: #8B0909;
-    color: #;
     padding: 12px 30px;
     border: none;
     border-radius: 25px;
@@ -129,3 +128,37 @@ header {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
+
+/* Signup HTML */
+#signuphead h1 {
+  text-align: center;
+  font-size: 56px;
+}
+
+#signupform {
+  max-width: 400px;
+  margin: 0 auto; 
+}
+
+.supInput {
+  display: block;
+  width: 100%; 
+  margin-bottom: 15px;
+  padding: 10px; 
+  font-size: 16px; 
+}
+
+.supInput[type="submit"] {
+  width: 105%; 
+  padding: 10px; 
+  font-size: 18px; 
+  background-color: #007BFF; 
+  color: white;
+  border: none;
+  cursor: pointer; 
+}
+
+.supInput[type="submit"]:hover {
+  background-color: #0056b3; 
+}
+

@@ -1,6 +1,4 @@
-import os
-import re
-import sqlite3
+import os, re, mysql.connector
 
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
@@ -39,25 +37,18 @@ users = {
     "user": "123"
 }
 
-# Initialize SQLite database
-def init_db():
-    conn = sqlite3.connect('vulnerabilities.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS vulnerabilities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cve TEXT,
-            description TEXT,
-            date_found TEXT,
-            systems_affected TEXT,
-            severity_rating TEXT,
-            remediation_plan TEXT,
-            cost_estimate TEXT,
-            profession_needed TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
+# config to connect database
+db_config = {
+    'user': 'ipro_admin',
+    'password': 'Iproadmin$497',
+    'host': 'ipro-497-db-instance-1.crhoiczd7use.us-east-1.rds.amazonaws.com', 
+    'database': 'ipro497db',
+    'port': '3306'
+}
+
+# get connnection function 
+def db_connection():
+    return mysql.connector.connect(**db_config)
 
 @app.route('/')
 def home():
@@ -162,20 +153,24 @@ def categorize_cves(cves):
 
 # Function to store parsed vulnerabilities in the database
 def store_in_database(cves):
-    conn = sqlite3.connect('vulnerabilities.db')
-    c = conn.cursor()
+    conn = db_connection()
+    cur = conn.cursor()
 
-    for cve in cves:
-        c.execute('''
-            INSERT INTO vulnerabilities (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (cve['id'], cve['description'], None, None, None, None, None, None))
+    try:
+      for cve in cves:
+          cur.execute('''
+              INSERT INTO vulnerability (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ''', (cve['id'], cve['description'], None, None, None, None, None, None))
+          conn.commit
+    except:
+        print("place holder")
 
-    conn.commit()
+
+    cur.close()
     conn.close()
 
 # Function to get ChatGPT analysis of CVEs
-
 def get_chatgpt_analysis(cves):
     if not cves:
         return "No CVEs found in the report."
