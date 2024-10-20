@@ -3,7 +3,9 @@ import os, re, mysql.connector
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
 from openai import OpenAI
-from dotenv import load_dotenv  # Corrected import to load environment variables
+
+from dotenv import load_dotenv  # New import to load environment variables
+import mysql.connector
 
 # Load environment variables from .env file
 load_dotenv()  # New line to load environment variables
@@ -21,6 +23,14 @@ client = OpenAI(api_key=openai_api_key)  # Use the environment variable API key
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
+def get_db_connection():
+    conn = mysql.connector.connect(
+        host="your-aws-rds-endpoint",
+        user="your_db_user",
+        password="your_password",
+        database="your_db_name"
+    )
+    return conn
 # Path to store uploaded files
 UPLOAD_FOLDER = './uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -236,8 +246,44 @@ def extractVulnerabilities(filepath):
     vulnerabilities_text = response['choices'][0]['message']['content']
     vulnerabilities = vulnerabilities_text.strip().split('\n')
 
-    return vulnerabilities
+    return response.choices[0].message.content
+    
+# Route to fetch vulnerabilities by report_id
+@app.route('/report/<int:report_id>', methods=['GET'])
+def get_vulnerabilities(report_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
+    query = """
+    SELECT v.name, v.severity, v.description, v.cve, v.systems, v.skill, v.parties, v.low_cost, v.high_cost
+    FROM report_vulnerability rv
+    JOIN report r ON rv.report_id = r.report_id
+    JOIN vulnerability v ON rv.vulnerability_id = v.vulnerability_id
+    WHERE r.report_id = %s;
+    """
+    cursor.execute(query, (report_id,))
+    vulnerabilities = cursor.fetchall()
+
+    # Format data as JSON
+    formatted_data = [
+        {
+            "name": row[0],
+            "severity": row[1],
+            "description": row[2],
+            "cve": row[3],
+            "systems": row[4],
+            "skill": row[5],
+            "parties": row[6],
+            "low_cost": row[7],
+            "high_cost": row[8],
+        }
+        for row in vulnerabilities
+    ]
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(formatted_data)
 @app.route('/logout')
 def logout():
     session.pop('username', None)
