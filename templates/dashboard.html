@@ -99,10 +99,15 @@
                     progressFill.style.width = "100%";
                     timeRemaining.textContent = "Upload complete!";
 
-                    // Parse the response and display CVEs and ChatGPT analysis
-                    let responseData = JSON.parse(xhr.responseText);
-                    if (responseData.cves && responseData.analysis) {
-                        displayResults(responseData.cves, responseData.analysis);
+                    // Try to parse the response as JSON
+                    try {
+                        let responseData = JSON.parse(xhr.responseText);
+                        if (responseData.cves && responseData.analysis) {
+                            displayResults(responseData.cves, responseData.analysis);
+                        }
+                    } catch (error) {
+                        console.error('Failed to parse JSON response:', error);
+                        timeRemaining.textContent = "Error parsing server response.";
                     }
                 } else {
                     timeRemaining.textContent = "Error during upload!";
@@ -133,4 +138,3 @@
     </script>
 </body>
 </html>
-
