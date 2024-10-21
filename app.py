@@ -255,7 +255,19 @@ def extractVulnerabilities(filepath):
     # Prepare the messages for GPT-4 chat format
     messages = [
         {"role": "system",
-         "content": "You are a cybersecurity assistant. Your task is to extract all vulnerabilities from a given PenTest report."},
+         "content": 'You are a cybersecurity assistant. Your task is to extract all vulnerabilities from a given PenTest report in this JSON Format:  {\n' 
+            '"name": STRING,\n' +
+            '"severity": STRING,\n' +
+            '"description": STRING,\n' +
+            # '"cve": STRING,\n' +
+            '"systems": STRING,\n' +
+            '"skill": STRING,\n' +
+            '"parties": STRING,\n' +
+            '"low_cost": STRING,\n' +
+            '"high_cost": STRING,\n' +
+        '}\n' +
+         'Each row in the JSON must only contain one word.  The exception is description; this row is allowed to have at most 20 words.  '
+         },
         {"role": "user",
          "content": f"Here is the PenTest report:\n\n{report_text}\n\nPlease extract and list all vulnerabilities."}
     ]
@@ -269,7 +281,7 @@ def extractVulnerabilities(filepath):
     )
 
     vulnerabilities_text = response['choices'][0]['message']['content']
-    vulnerabilities = vulnerabilities_text.strip().split('\n')
+   # vulnerabilities = vulnerabilities_text.strip().split('\n')
 
     return response.choices[0].message.content
     
