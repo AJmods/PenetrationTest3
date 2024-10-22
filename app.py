@@ -1,4 +1,5 @@
 import os, re, mysql.connector
+from http.client import responses
 
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
@@ -7,6 +8,7 @@ from openai import OpenAI
 from dotenv import load_dotenv  # New import to load environment variables
 import mysql.connector
 import logging
+import json
 
 # Load environment variables from .env file
 load_dotenv()  # New line to load environment variables
@@ -28,6 +30,30 @@ gunicorn_error_logger = logging.getLogger('gunicorn.error')
 app.logger.handlers.extend(gunicorn_error_logger.handlers)
 app.logger.setLevel(logging.DEBUG)
 app.logger.debug('Logging works')
+
+# class Vulnerability():
+#     def __init__(self,cve="", description="", date_found="", systems_affected="", severity_rating="", remediation_plan="", cost_estimate="", profession_needed=""):
+#         self.cve = cve
+#         self.description = description
+#         self.date_found = date_found
+#         self.systems_affected = systems_affected
+#         self.severity_rating = severity_rating
+#         self.remediation_plan = remediation_plan
+#         self.cost_estimate = cost_estimate
+#         self.profession_needed = profession_needed
+#
+#     def __str__(self):
+
+vulTemplete = {
+    "cve":"",
+    "description":"",
+    "date_found":"",
+    "systems_affected":"",
+    "severity_rating":"",
+    "remediation_plan":"",
+    "cost_estimate":"",
+    "profession_needed":""
+}
 
 def get_db_connection():
     conn = mysql.connector.connect(
@@ -137,27 +163,36 @@ def upload_file():
         filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(filename)
 
-        # Extract CVEs from the file
-        cves = extract_cves(filename)
-        categorized_cves = categorize_cves(cves)
-
-        print("extracting vuls")
-
-        #vuls = extractVulnerabilities(filename)
-       # print(vuls)
-
-        # Store vulnerabilities in the database
-        #store_in_database(categorized_cves)
-
-        # Get ChatGPT analysis of the CVEs
-        analysis = get_chatgpt_analysis(cves)
-
-        return jsonify({'cves': categorized_cves, 'analysis': analysis})
-
     except Exception as e:
         # Log the error and return a JSON error response
         print(f"Error during file upload: {e}")
         return jsonify({'error': 'An error occurred during file processing.'}), 500
+
+    # Extract CVEs from the file
+    cves = extract_cves(filename)
+    categorized_cves = categorize_cves(cves)
+
+    print("extracting vuls")
+
+    vuls = []
+    for cve in cves:
+        newVel = vulTemplete
+        newVel['cve'] = cve
+        vuls.append(newVel)
+
+    print(f"getting infomation for {len(vuls)} vulnerabilities")
+    vuls = extractVulnerabilities(vuls)
+
+    print("Finished Extracted")
+        # print(vuls)
+
+        # Store vulnerabilities in the database
+        #store_in_database(vuls)
+
+        # Get ChatGPT analysis of the CVEs
+        # analysis = get_chatgpt_analysis(cves)
+    #return json.dumps(vuls, indent=2)
+    return jsonify({'cves': categorized_cves, 'analysis': json.dumps(vuls,indent=2)})
 
 
 # Function to extract CVEs from PDF or text file
@@ -193,19 +228,22 @@ def categorize_cves(cves):
     return categorized
 
 # Function to store parsed vulnerabilities in the database
-def store_in_database(cves):
+def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
 
+    # if not list (only one vul) make it a list of length 1 so it works with the for loop
+    if not isinstance(vuls, list):
+        vuls = [vuls]
     try:
-      for cve in cves:
-          cur.execute('''
+      for vul in vuls:
+          cur.execute(f'''
               INSERT INTO vulnerability (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ''', (cve['id'], cve['description'], None, None, None, None, None, None))
-          conn.commit
+              VALUES ({vul['cve']}, {vul['description']}, {vul['date_found']}, {vul['systems_affected']}, {vul['severity_rating']}, {vul['remediation_plan']}, {vul['cost_estimate']}, {vul['profession_needed']})
+          ''', )
+          conn.commit()
     except:
-        print("place holder")
+        print("Failed to add to database")
 
 
     cur.close()
@@ -252,44 +290,45 @@ def get_chatgpt_analysis(cves):
 
 
 
-def extractVulnerabilities(filepath):
-    vulnerabilities = []
+def extractVulnerabilities(vulnerabilities):
+    #vulnerabilities = []
 
     # Open and read the PDF file
-    report_text = extract_from_pdf(filepath) if filepath.endswith('.pdf') else extract_from_txt(filepath)
+    #report_text = extract_from_pdf(filepath) if filepath.endswith('.pdf') else extract_from_txt(filepath)
 
-    # Prepare the messages for GPT-4 chat format
-    messages = [
-        {"role": "system",
-         "content": 'You are a cybersecurity assistant. Your task is to extract all vulnerabilities from a given PenTest report in this JSON Format:  {\n' 
-            '"name": STRING,\n' +
-            '"severity": STRING,\n' +
-            '"description": STRING,\n' +
-            # '"cve": STRING,\n' +
-            '"systems": STRING,\n' +
-            '"skill": STRING,\n' +
-            '"parties": STRING,\n' +
-            '"low_cost": STRING,\n' +
-            '"high_cost": STRING,\n' +
-        '}\n' +
-         'Each row in the JSON must only contain one word.  The exception is description; this row is allowed to have at most 20 words.  '
-         },
-        {"role": "user",
-         "content": f"Here is the PenTest report:\n\n{report_text}\n\nPlease extract and list all vulnerabilities."}
-    ]
+    OpenAI_Responses = []
+    vulnerabilities = vulnerabilities[0:2]
+    for vul in vulnerabilities:
+        # Prepare the messages for GPT-4 chat format
+        messages = [
+            {"role": "system",
+             "content": 'You are a cybersecurity assistant'
+             #json.dumps(vul)
+             },
+            {"role": "user",
+             "content": f"Here is a JSON of a vulnerability:\n\n{json.dumps(vul)}\n\nPlease fill in the empty rows."}
+        ]
 
-    # Use OpenAI's ChatCompletion API to extract vulnerabilities
-    response = client.chat.completions.create(
-        model="gpt-4",  # Use the appropriate model
-        messages=messages,
-        max_tokens=1500,  # Adjust based on report size
-        temperature=0.3
-    )
+        print(messages)
 
-    vulnerabilities_text = response['choices'][0]['message']['content']
+        # Use OpenAI's ChatCompletion API to extract vulnerabilities
+        response = client.chat.completions.create(
+            model="gpt-4",  # Use the appropriate model
+            messages=messages,
+            max_tokens=1500,  # Adjust based on report size
+            temperature=0.3
+        )
+        print(response.choices[0].message.content)
+        OpenAI_Responses.append(response.choices[0].message.content)
+
+    return OpenAI_Responses
+
+   # vulnerabilities_text = response['choices'][0]['message']['content']
    # vulnerabilities = vulnerabilities_text.strip().split('\n')
 
-    return response.choices[0].message.content
+
+
+
     
 # Route to fetch vulnerabilities by report_id
 @app.route('/report/<int:report_id>', methods=['GET'])
@@ -348,5 +387,5 @@ def history():
     return render_template('history.html')
 
 if __name__ == '__main__':
-    init_db()  # Initialize the database on startup
+   # init_db()  # Initialize the database on startup
     app.run(host='0.0.0.0', port=8080, debug=True)
