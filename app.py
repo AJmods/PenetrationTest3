@@ -7,7 +7,6 @@ from openai import OpenAI
 
 from dotenv import load_dotenv  # New import to load environment variables
 
-import mysql.connector
 import logging
 import json
 import ast
@@ -56,15 +55,6 @@ vulTemplete = {
     "profession_needed":""
 }
 
-@DeprecationWarning
-def get_db_connection():
-    conn = mysql.connector.connect(
-        host="your-aws-rds-endpoint",
-        user="your_db_user",
-        password="your_password",
-        database="your_db_name"
-    )
-    return conn
 # Path to store uploaded files
 UPLOAD_FOLDER = './uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -98,9 +88,11 @@ def db_connection():
 def home():
     return redirect(url_for('index'))
 
-#moved all of the login() code to index() and it kinda just works
+#comment out login and change the redirct function to index this way we only have 1 login function 
+# created session for user ID
 @app.route('/index', methods=['GET', 'POST'])
 def index():
+    session.clear() # clear previous section
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
@@ -113,15 +105,17 @@ def index():
             user = cur.fetchone()
             if user is None:
                 flash('Invalid credentials, please try again.', 'error')
-                return redirect(url_for('login'))
+                return redirect(url_for('index'))
             else:
-                session['username'] = user[2]  # type: ignore
+                session['username'] = user[1]  # type: ignore 
+                session['user_id'] = user[0] # type: ignore
+
                 flash('Login successful!', 'success')
                 return redirect(url_for('dashboard'))
 
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
+            return redirect(url_for('index'))
 
         finally:
             cur.close()
@@ -144,7 +138,7 @@ def register():
         
         cur.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)', (first, last, email, password))
         conn.commit()
-        return redirect(url_for('login'))
+        return redirect(url_for('index'))
       
       except mysql.connector.Error as err: 
         flash('An error has been detected; this email might have been used')
@@ -157,37 +151,37 @@ def register():
     return render_template('signup.html')
 
 
-#I copied all the code from login() to index() and now this stuff works
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+# # no longer needed
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         email = request.form['email']
+#         password = request.form['password']
 
-        conn = db_connection()
-        cur = conn.cursor()
+#         conn = db_connection()
+#         cur = conn.cursor()
 
-        try:
-          cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
-          user = cur.fetchone()
-          if user is None:
-            flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
-          else:
-            session['username'] = user[2] # type: ignore
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
+#         try:
+#           cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
+#           user = cur.fetchone()
+#           if user is None:
+#             flash('Invalid credentials, please try again.', 'error')
+#             return redirect(url_for('login'))
+#           else:
+#             session['username'] = user[2] # type: ignore
+#             flash('Login successful!', 'success')
+#             return redirect(url_for('dashboard'))
 
-        except mysql.connector.Error as err:
-          flash('Invalid credentials, please try again.', 'error')
-          return redirect(url_for('login'))
+#         except mysql.connector.Error as err:
+#           flash('Invalid credentials, please try again.', 'error')
+#           return redirect(url_for('login'))
 
-        finally:
-            cur.close()
-            conn.close()
+#         finally:
+#             cur.close()
+#             conn.close()
 
 
-    return render_template('index.html')
+#     return render_template('index.html')
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -215,6 +209,21 @@ def upload_file():
             return jsonify({'error': 'No selected file'}), 400
 
         filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+
+      # -----Trying to insert report info to database---------------------------------------------------------------------------------------------------------
+        conn = db_connection()
+        cur = conn.cursor()
+        try:
+            user_id = session['user_id']
+            cur.execute("INSERT INTO report (title, user_id) VALUES (%s, %s)", (filename, user_id))
+            conn.commit
+        except mysql.connector.Error as err:
+            flash('Invalid credentials, please try again.', 'error')
+        finally:
+            cur.close
+            conn.close
+
+      # -------------------------------------------------------------------------------------------------------------------------------
         file.save(filename)
 
     except Exception as e:
