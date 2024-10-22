@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from dotenv import load_dotenv  # New import to load environment variables
 import mysql.connector
+import logging
 
 # Load environment variables from .env file
 load_dotenv()  # New line to load environment variables
