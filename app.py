@@ -9,7 +9,7 @@ from dotenv import load_dotenv  # New import to load environment variables
 import mysql.connector
 import logging
 import json
-
+import ast
 # Load environment variables from .env file
 load_dotenv()  # New line to load environment variables
 
@@ -55,6 +55,7 @@ vulTemplete = {
     "profession_needed":""
 }
 
+@DeprecationWarning
 def get_db_connection():
     conn = mysql.connector.connect(
         host="your-aws-rds-endpoint",
@@ -108,6 +109,7 @@ def index():
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid credentials, please try again.', 'error')
+            return redirect(url_for('index'))
 
     return render_template('index.html')
 
@@ -172,7 +174,7 @@ def upload_file():
     cves = extract_cves(filename)
     categorized_cves = categorize_cves(cves)
 
-    print("extracting vuls")
+    #print("extracting vuls")
 
     vuls = []
     for cve in cves:
@@ -183,11 +185,14 @@ def upload_file():
     print(f"getting infomation for {len(vuls)} vulnerabilities")
     vuls = extractVulnerabilities(vuls)
 
+
+    print(vuls)
     print("Finished Extracted")
         # print(vuls)
 
         # Store vulnerabilities in the database
-        #store_in_database(vuls)
+    store_in_database(vuls)
+
 
         # Get ChatGPT analysis of the CVEs
         # analysis = get_chatgpt_analysis(cves)
@@ -237,18 +242,22 @@ def store_in_database(vuls):
         vuls = [vuls]
     try:
       for vul in vuls:
-          cur.execute(f'''
+          sqlStatement = f'''
               INSERT INTO vulnerability (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
-              VALUES ({vul['cve']}, {vul['description']}, {vul['date_found']}, {vul['systems_affected']}, {vul['severity_rating']}, {vul['remediation_plan']}, {vul['cost_estimate']}, {vul['profession_needed']})
-          ''', )
+              VALUES ("{vul['cve']}", "{vul['description']}", "{vul['date_found']}", "{vul['systems_affected']}", "{vul['severity_rating']}", "{vul['remediation_plan']}", "{vul['cost_estimate']}", "{vul['profession_needed']}")
+          '''
+          print(sqlStatement)
+          cur.execute(sqlStatement, )
           conn.commit()
-    except:
-        print("Failed to add to database")
+      print("added vulnerabilities to database")
+    except Exception as e:
+        print(f"Could not upload to database, Error: {e}")
 
 
     cur.close()
     conn.close()
 
+@DeprecationWarning
 # Function to get ChatGPT analysis of CVEs
 def get_chatgpt_analysis(cves):
     if not cves:
@@ -297,7 +306,7 @@ def extractVulnerabilities(vulnerabilities):
     #report_text = extract_from_pdf(filepath) if filepath.endswith('.pdf') else extract_from_txt(filepath)
 
     OpenAI_Responses = []
-    vulnerabilities = vulnerabilities[0:2]
+   # vulnerabilities = vulnerabilities[0:2] #reduce list entries for testing purposes
     for vul in vulnerabilities:
         # Prepare the messages for GPT-4 chat format
         messages = [
@@ -306,10 +315,10 @@ def extractVulnerabilities(vulnerabilities):
              #json.dumps(vul)
              },
             {"role": "user",
-             "content": f"Here is a JSON of a vulnerability:\n\n{json.dumps(vul)}\n\nPlease fill in the empty rows."}
+             "content": f"Here is a JSON of a vulnerability:\n\n{json.dumps(vul)}\n\nPlease fill in the empty rows.  Please do not add extra test outside of the JSON"}
         ]
 
-        print(messages)
+      #  print(messages)
 
         # Use OpenAI's ChatCompletion API to extract vulnerabilities
         response = client.chat.completions.create(
@@ -318,8 +327,11 @@ def extractVulnerabilities(vulnerabilities):
             max_tokens=1500,  # Adjust based on report size
             temperature=0.3
         )
-        print(response.choices[0].message.content)
-        OpenAI_Responses.append(response.choices[0].message.content)
+       # print(response.choices[0].message.content)
+        vulDict = ast.literal_eval(response.choices[0].message.content)
+     #   print(vulDict)
+        OpenAI_Responses.append(vulDict)
+        #OpenAI_Responses.append(response.choices[0].message.content)
 
     return OpenAI_Responses
 
@@ -333,7 +345,7 @@ def extractVulnerabilities(vulnerabilities):
 # Route to fetch vulnerabilities by report_id
 @app.route('/report/<int:report_id>', methods=['GET'])
 def get_vulnerabilities(report_id):
-    conn = get_db_connection()
+    conn = db_connection()
     cursor = conn.cursor()
 
     query = """
