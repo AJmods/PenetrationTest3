@@ -34,10 +34,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 CVE_REGEX = r'CVE-\d{4}-\d{4,7}'
 
 # Dummy user data for login validation
-users = {
-    "admin": "Newsy",
-    "user": "123"
-}
+# users = {
+#     "admin": "Newsy",
+#     "user": "123"
+# }
 
 # config to connect database
 db_config = {
@@ -301,7 +301,7 @@ def extractVulnerabilities(filepath):
 # Route to fetch vulnerabilities by report_id
 @app.route('/report/<int:report_id>', methods=['GET'])
 def get_vulnerabilities(report_id):
-    conn = get_db_connection()
+    conn = db_connection()
     cursor = conn.cursor()
 
     query = """
