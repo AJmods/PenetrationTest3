@@ -387,5 +387,4 @@ def history():
     return render_template('history.html')
 
 if __name__ == '__main__':
-   # init_db()  # Initialize the database on startup
     app.run(host='0.0.0.0', port=8080, debug=True)
