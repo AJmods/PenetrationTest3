@@ -42,21 +42,16 @@
         <ul id="cve-list"></ul>
     </section>
 
-    <!-- ChatGPT Analysis Section -->
-    <section class="chatgpt-analysis" style="display: none;">
-        <h2>AI Analysis</h2>
-        <p id="analysis-text"></p>
-    </section>
+    <!-- Vulnerabilities Section -->
+    <section id="vulnerabilities" style="display: none;"></section>
 
     <script>
         let uploadForm = document.getElementById("upload-form");
         let uploadBtn = document.getElementById("uploadBtn");
         let progressContainer = document.getElementById("progress-container");
-        let progressBar = document.getElementById("progress-bar");
         let progressFill = document.getElementById("progress-fill");
         let timeRemaining = document.getElementById("time-remaining");
         let cveResultsSection = document.querySelector('.cve-results');
-        let analysisSection = document.querySelector('.chatgpt-analysis');
 
         let startTime;
         let totalSize;
@@ -95,22 +90,18 @@
             };
 
             xhr.onload = function () {
-                if (xhr.status === 200) {
-                    progressFill.style.width = "100%";
-                    timeRemaining.textContent = "Upload complete!";
+                progressFill.style.width = "100%";
+                timeRemaining.textContent = "Upload complete!";
 
-                    // Try to parse the response as JSON
-                    try {
-                        let responseData = JSON.parse(xhr.responseText);
-                        if (responseData.cves && responseData.analysis) {
-                            displayResults(responseData.cves, responseData.analysis);
-                        }
-                    } catch (error) {
-                        console.error('Failed to parse JSON response:', error);
-                        timeRemaining.textContent = "Error parsing server response.";
+                // Try to parse the response as JSON
+                try {
+                    let responseData = JSON.parse(xhr.responseText);
+                    if (responseData.cves) {
+                        displayResults(responseData.cves);
                     }
-                } else {
-                    timeRemaining.textContent = "Error during upload!";
+                } catch (error) {
+                    console.error('Failed to parse JSON response:', error);
+                    timeRemaining.textContent = "Error parsing server response.";
                 }
             };
 
@@ -121,7 +112,7 @@
             xhr.send(formData);
         });
 
-        function displayResults(cves, analysis) {
+        function displayResults(cves) {
             // Show the CVE results section
             cveResultsSection.style.display = "block";
             let cveList = document.getElementById('cve-list');
@@ -130,11 +121,31 @@
             cves.forEach(function (cve) {
                 cveList.innerHTML += `<li>${cve.id}: ${cve.description} (Category: ${cve.category})</li>`;
             });
-
-            // Show the ChatGPT analysis section
-            analysisSection.style.display = "block";
-            document.getElementById('analysis-text').textContent = analysis;
         }
+
+        // Fetch vulnerability data for a report (report ID is hardcoded as 1 for this example)
+        fetch('/report/1')  // Replace 1 with the actual report ID
+            .then(response => response.json())
+            .then(data => {
+                const vulnerabilitiesDiv = document.getElementById('vulnerabilities');
+                data.forEach(vulnerability => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <div class="card-header">${vulnerability.cve} - Severity: ${vulnerability.severity}</div>
+                        <div class="card-body">
+                            <p><strong>Name:</strong> ${vulnerability.name}</p>
+                            <p><strong>Description:</strong> ${vulnerability.description}</p>
+                            <p><strong>Risk Estimation:</strong> ${vulnerability.risk_estimation}</p>
+                            <p><strong>Cost to Fix:</strong> ${vulnerability.low_cost} - ${vulnerability.high_cost}</p>
+                            <p><strong>Time to Fix:</strong> ${vulnerability.time_to_fix}</p>
+                        </div>
+                    `;
+                    vulnerabilitiesDiv.appendChild(card);
+                });
+                vulnerabilitiesDiv.style.display = 'block'; // Show the vulnerabilities section
+            })
+            .catch(error => console.error('Error fetching vulnerabilities:', error));
     </script>
 </body>
 </html>
