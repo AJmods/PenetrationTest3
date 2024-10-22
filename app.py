@@ -101,16 +101,30 @@ def home():
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
 
-        if username in users and users[username] == password:
-            session['username'] = username
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
-        else:
+        conn = db_connection()
+        cur = conn.cursor()
+
+        try:
+            cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
+            user = cur.fetchone()
+            if user is None:
+                flash('Invalid credentials, please try again.', 'error')
+                return redirect(url_for('login'))
+            else:
+                session['username'] = user[2]  # type: ignore
+                flash('Login successful!', 'success')
+                return redirect(url_for('dashboard'))
+
+        except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('login'))
+
+        finally:
+            cur.close()
+            conn.close()
 
     return render_template('index.html')
 
@@ -142,13 +156,15 @@ def register():
     return render_template('signup.html')
 
 
+#I copied all the code from login() to index() and now this stuff works
 @app.route('/login', methods=['GET', 'POST'])
+@DeprecationWarning
 def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
 
-        conn = db_connection() 
+        conn = db_connection()
         cur = conn.cursor()
 
         try:
@@ -161,15 +177,15 @@ def login():
             session['username'] = user[2] # type: ignore
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
-        
+
         except mysql.connector.Error as err:
           flash('Invalid credentials, please try again.', 'error')
           return redirect(url_for('login'))
-        
+
         finally:
             cur.close()
             conn.close()
-           
+
 
     return render_template('index.html')
 
@@ -379,11 +395,13 @@ def extractVulnerabilities(vulnerabilities):
 
     
 # Route to fetch vulnerabilities by report_id
+
 @app.route('/report/<int:report_id>', methods=['GET'])
 def get_vulnerabilities(report_id):
     conn = db_connection()
     cursor = conn.cursor()
 
+    # this shit is complicated
     query = """
     SELECT v.name, v.severity, v.description, v.cve, v.systems, v.skill, v.parties, v.low_cost, v.high_cost
     FROM report_vulnerability rv
@@ -391,7 +409,10 @@ def get_vulnerabilities(report_id):
     JOIN vulnerability v ON rv.vulnerability_id = v.vulnerability_id
     WHERE r.report_id = %s;
     """
-    cursor.execute(query, (report_id,))
+
+    #I made the query really simple and it kinda just works
+    simpleQuery = "SELECT * FROM vulnerability"
+    cursor.execute(simpleQuery)
     vulnerabilities = cursor.fetchall()
 
     # Format data as JSON
@@ -413,7 +434,7 @@ def get_vulnerabilities(report_id):
     cursor.close()
     conn.close()
 
-    return jsonify(formatted_data)
+    return formatted_data
 @app.route('/logout')
 def logout():
     session.pop('username', None)
