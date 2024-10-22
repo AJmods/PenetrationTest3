@@ -101,8 +101,8 @@
         <h2>Login</h2>
         <form method="POST" action="{{ url_for('index') }}">
             <div class="input-box">
-                <input type="text" id="username" name="username" required>
-                <label for="username">Username</label>
+                <input type="text" id="email" name="email" required>
+                <label for="email">Email</label>
             </div>
 
             <div class="input-box">
@@ -114,7 +114,7 @@
 
             <div class="extra-links">
                 <a href="/forgot-password">Forgot Password?</a>
-                <a href="/register">Register</a>
+                <p>New user? <a href="{{ url_for('register') }}">Sign up here</a></p>
             </div>
 
             <div id="message">

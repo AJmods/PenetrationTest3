@@ -6,6 +6,7 @@ from pdfminer.high_level import extract_text
 from openai import OpenAI
 
 from dotenv import load_dotenv  # New import to load environment variables
+
 import mysql.connector
 import logging
 import json
@@ -74,10 +75,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 CVE_REGEX = r'CVE-\d{4}-\d{4,7}'
 
 # Dummy user data for login validation
-users = {
-    "admin": "Newsy",
-    "user": "123"
-}
+# users = {
+#     "admin": "Newsy",
+#     "user": "123"
+# }
 
 # config to connect database
 db_config = {
@@ -96,44 +97,65 @@ def db_connection():
 def home():
     return redirect(url_for('index'))
 
-@app.route('/index', methods=['GET', 'POST'])
-def index():
+@app.route('/register', methods=['GET','POST'])
+def register():
     if request.method == 'POST':
-        username = request.form['username']
+
+      first = request.form['First']
+      last = request.form['Last']
+      email = request.form['Email']
+      password = request.form['Password']
+
+      conn = db_connection()
+      cur = conn.cursor()
+
+      try:
+        
+        cur.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)', (first, last, email, password))
+        conn.commit()
+        return redirect(url_for('login'))
+      
+      except mysql.connector.Error as err: 
+        flash('An error has been detected; this email might have been used')
+        return redirect(url_for('register')) 
+      
+      finally:
+        cur.close()
+        conn.close()
+      
+    return render_template('signup.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
         password = request.form['password']
 
-        if username in users and users[username] == password:
-            session['username'] = username
+        conn = db_connection() 
+        cur = conn.cursor()
+
+        try:
+          cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
+          user = cur.fetchone()
+          if user is None:
+            flash('Invalid credentials, please try again.', 'error')
+            return redirect(url_for('login'))
+          else:
+            session['username'] = user[2] # type: ignore
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid credentials, please try again.', 'error')
+        
+        except mysql.connector.Error as err:
+          flash('Invalid credentials, please try again.', 'error')
+          return redirect(url_for('login'))
+        
+        finally:
+            cur.close()
+            conn.close()
+           
 
     return render_template('index.html')
-
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    first = request.form.get('First')
-    last = request.form.get('Last')
-    email = request.form.get('Email')
-    password = request.form.get('Password')
-
-    conn = db_connection()
-    curr = conn.cursor()
-    try:
-        curr.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)',
-                     (first, last, email, password))
-        conn.commit()
-        flash('Welcome to Zebra!')
-        return redirect(url_for('index'))
-    except mysql.connector.Error as err:
-        flash('An error has been detected; this email might have been used or format is incorrect')
-        return render_template("signup.html")
-
-    finally:
-        curr.close()
-        conn.close()
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -333,7 +355,7 @@ def extractVulnerabilities(vulnerabilities):
 # Route to fetch vulnerabilities by report_id
 @app.route('/report/<int:report_id>', methods=['GET'])
 def get_vulnerabilities(report_id):
-    conn = get_db_connection()
+    conn = db_connection()
     cursor = conn.cursor()
 
     query = """
