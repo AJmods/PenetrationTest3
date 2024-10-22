@@ -97,7 +97,8 @@ def db_connection():
 @app.route('/')
 def home():
     return redirect(url_for('index'))
-  
+
+#moved all of the login() code to index() and it kinda just works
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -158,7 +159,6 @@ def register():
 
 #I copied all the code from login() to index() and now this stuff works
 @app.route('/login', methods=['GET', 'POST'])
-@DeprecationWarning
 def login():
     if request.method == 'POST':
         email = request.form['email']
