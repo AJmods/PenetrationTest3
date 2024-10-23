@@ -213,13 +213,17 @@ def upload_file():
       # -----Trying to insert report info to database---------------------------------------------------------------------------------------------------------
         conn = db_connection()
         cur = conn.cursor()
+        user_id = session['user_id']
         try:
-            user_id = session['user_id']
             cur.execute("INSERT INTO report (title, user_id) VALUES (%s, %s)", (filename, user_id))
             conn.commit
+
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
         finally:
+            cur.execute("SELECT report_id from report WHERE title = %s and user_id = %s  ORDER BY report_id DESC LIMIT 1", (filename, user_id) ) # give most recent entre
+            reportID = cur.fetchone()
+            session['report_id'] = reportID[0]  # type: ignore
             cur.close
             conn.close
 
@@ -297,7 +301,7 @@ def categorize_cves(cves):
 def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
-
+    report_id = session['report_id']
     # if not list (only one vul) make it a list of length 1 so it works with the for loop
     if not isinstance(vuls, list):
         vuls = [vuls]
@@ -310,6 +314,16 @@ def store_in_database(vuls):
           print(sqlStatement)
           cur.execute(sqlStatement, )
           conn.commit()
+
+  # -----Create link between report file and its vulnerability-------------------------------------------------------------------------------------------
+          cur.execute("SELECT vulnerability_id FROM vulnerability ORDER BY vulnerability_id DESC LIMIT 1")
+          vID = cur.fetchone()
+          vulnID = vID[0] # type: ignore
+          cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
+          conn.commit()
+
+  # ------------------------------------------------------------------------------------------------------------------------
+
       print("added vulnerabilities to database")
     except Exception as e:
         print(f"Could not upload to database, Error: {e}")
@@ -420,8 +434,11 @@ def get_vulnerabilities(report_id):
     """
 
     #I made the query really simple and it kinda just works
-    simpleQuery = "SELECT * FROM vulnerability"
-    cursor.execute(simpleQuery)
+    #change the query so select all vulnerability with the right report ID (might not work)
+    #simpleQuery = "SELECT * FROM vulnerability"
+    report_id = session['report_id']
+    simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
+    cursor.execute(simpleQuery,(report_id,))
     vulnerabilities = cursor.fetchall()
 
     # Format data as JSON
