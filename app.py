@@ -7,7 +7,6 @@ from openai import OpenAI
 
 from dotenv import load_dotenv  # New import to load environment variables
 
-import mysql.connector
 import logging
 import json
 import ast
@@ -56,15 +55,6 @@ vulTemplete = {
     "profession_needed":""
 }
 
-@DeprecationWarning
-def get_db_connection():
-    conn = mysql.connector.connect(
-        host="your-aws-rds-endpoint",
-        user="your_db_user",
-        password="your_password",
-        database="your_db_name"
-    )
-    return conn
 # Path to store uploaded files
 UPLOAD_FOLDER = './uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -98,9 +88,11 @@ def db_connection():
 def home():
     return redirect(url_for('index'))
 
-#moved all of the login() code to index() and it kinda just works
+#comment out login and change the redirct function to index this way we only have 1 login function 
+# created session for user ID
 @app.route('/index', methods=['GET', 'POST'])
 def index():
+    session.clear() # clear previous section
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
@@ -113,15 +105,17 @@ def index():
             user = cur.fetchone()
             if user is None:
                 flash('Invalid credentials, please try again.', 'error')
-                return redirect(url_for('login'))
+                return redirect(url_for('index'))
             else:
-                session['username'] = user[2]  # type: ignore
+                session['username'] = user[1]  # type: ignore 
+                session['user_id'] = user[0] # type: ignore
+
                 flash('Login successful!', 'success')
                 return redirect(url_for('dashboard'))
 
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
+            return redirect(url_for('index'))
 
         finally:
             cur.close()
@@ -144,7 +138,7 @@ def register():
         
         cur.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)', (first, last, email, password))
         conn.commit()
-        return redirect(url_for('login'))
+        return redirect(url_for('index'))
       
       except mysql.connector.Error as err: 
         flash('An error has been detected; this email might have been used')
@@ -157,37 +151,37 @@ def register():
     return render_template('signup.html')
 
 
-#I copied all the code from login() to index() and now this stuff works
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+# # no longer needed
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         email = request.form['email']
+#         password = request.form['password']
 
-        conn = db_connection()
-        cur = conn.cursor()
+#         conn = db_connection()
+#         cur = conn.cursor()
 
-        try:
-          cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
-          user = cur.fetchone()
-          if user is None:
-            flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
-          else:
-            session['username'] = user[2] # type: ignore
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
+#         try:
+#           cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
+#           user = cur.fetchone()
+#           if user is None:
+#             flash('Invalid credentials, please try again.', 'error')
+#             return redirect(url_for('login'))
+#           else:
+#             session['username'] = user[2] # type: ignore
+#             flash('Login successful!', 'success')
+#             return redirect(url_for('dashboard'))
 
-        except mysql.connector.Error as err:
-          flash('Invalid credentials, please try again.', 'error')
-          return redirect(url_for('login'))
+#         except mysql.connector.Error as err:
+#           flash('Invalid credentials, please try again.', 'error')
+#           return redirect(url_for('login'))
 
-        finally:
-            cur.close()
-            conn.close()
+#         finally:
+#             cur.close()
+#             conn.close()
 
 
-    return render_template('index.html')
+#     return render_template('index.html')
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -215,6 +209,25 @@ def upload_file():
             return jsonify({'error': 'No selected file'}), 400
 
         filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+
+      # -----Trying to insert report info to database---------------------------------------------------------------------------------------------------------
+        conn = db_connection()
+        cur = conn.cursor()
+        user_id = session['user_id']
+        try:
+            cur.execute("INSERT INTO report (title, user_id) VALUES (%s, %s)", (filename, user_id))
+            conn.commit
+
+        except mysql.connector.Error as err:
+            flash('Invalid credentials, please try again.', 'error')
+        finally:
+            cur.execute("SELECT report_id from report WHERE title = %s and user_id = %s  ORDER BY report_id DESC LIMIT 1", (filename, user_id) ) # give most recent entre
+            reportID = cur.fetchone()
+            session['report_id'] = reportID[0]  # type: ignore
+            cur.close
+            conn.close
+
+      # -------------------------------------------------------------------------------------------------------------------------------
         file.save(filename)
 
     except Exception as e:
@@ -288,7 +301,7 @@ def categorize_cves(cves):
 def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
-
+    report_id = session['report_id']
     # if not list (only one vul) make it a list of length 1 so it works with the for loop
     if not isinstance(vuls, list):
         vuls = [vuls]
@@ -301,6 +314,16 @@ def store_in_database(vuls):
           print(sqlStatement)
           cur.execute(sqlStatement, )
           conn.commit()
+
+  # -----Create link between report file and its vulnerability-------------------------------------------------------------------------------------------
+          cur.execute("SELECT vulnerability_id FROM vulnerability ORDER BY vulnerability_id DESC LIMIT 1")
+          vID = cur.fetchone()
+          vulnID = vID[0] # type: ignore
+          cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
+          conn.commit()
+
+  # ------------------------------------------------------------------------------------------------------------------------
+
       print("added vulnerabilities to database")
     except Exception as e:
         print(f"Could not upload to database, Error: {e}")
@@ -411,8 +434,11 @@ def get_vulnerabilities(report_id):
     """
 
     #I made the query really simple and it kinda just works
-    simpleQuery = "SELECT * FROM vulnerability"
-    cursor.execute(simpleQuery)
+    #change the query so select all vulnerability with the right report ID (might not work)
+    #simpleQuery = "SELECT * FROM vulnerability"
+    report_id = session['report_id']
+    simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
+    cursor.execute(simpleQuery,(report_id,))
     vulnerabilities = cursor.fetchall()
 
     # Format data as JSON
