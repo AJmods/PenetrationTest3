@@ -385,7 +385,6 @@ def get_vulnerabilities():
     simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
     cursor.execute(simpleQuery,(reportID))
     vulnerabilities = cursor.fetchall()
-    print(vulnerabilities[0][1]) # type: ignore
     # Format data as JSON
     formatted_data = [
         {
