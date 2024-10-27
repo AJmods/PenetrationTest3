@@ -15,7 +15,7 @@ import ast
 load_dotenv()  # New line to load environment variables
 
 # Access the API key from the environment variable
-openai_api_key = os.getenv("OPENAI_API_KEY")  # Fetch API key from environment
+openai_api_key = "sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e" # Fetch API key from environment
 
 # Check if the API key is present
 if not openai_api_key:
@@ -31,19 +31,6 @@ gunicorn_error_logger = logging.getLogger('gunicorn.error')
 app.logger.handlers.extend(gunicorn_error_logger.handlers)
 app.logger.setLevel(logging.DEBUG)
 app.logger.debug('Logging works')
-
-# class Vulnerability():
-#     def __init__(self,cve="", description="", date_found="", systems_affected="", severity_rating="", remediation_plan="", cost_estimate="", profession_needed=""):
-#         self.cve = cve
-#         self.description = description
-#         self.date_found = date_found
-#         self.systems_affected = systems_affected
-#         self.severity_rating = severity_rating
-#         self.remediation_plan = remediation_plan
-#         self.cost_estimate = cost_estimate
-#         self.profession_needed = profession_needed
-#
-#     def __str__(self):
 
 vulTemplete = {
     "cve":"",
@@ -74,12 +61,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Regex to match CVE patterns
 CVE_REGEX = r'CVE-\d{4}-\d{4,7}'
-
-# Dummy user data for login validation
-# users = {
-#     "admin": "Newsy",
-#     "user": "123"
-# }
 
 # config to connect database
 db_config = {
@@ -156,40 +137,6 @@ def register():
       
     return render_template('signup.html')
 
-
-#I copied all the code from login() to index() and now this stuff works
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-
-        conn = db_connection()
-        cur = conn.cursor()
-
-        try:
-          cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
-          user = cur.fetchone()
-          if user is None:
-            flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
-          else:
-            session['username'] = user[2] # type: ignore
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
-
-        except mysql.connector.Error as err:
-          flash('Invalid credentials, please try again.', 'error')
-          return redirect(url_for('login'))
-
-        finally:
-            cur.close()
-            conn.close()
-
-
-    return render_template('index.html')
-
-
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
     if 'username' in session:
@@ -202,6 +149,7 @@ from flask import jsonify
 
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
+    filename = None
     try:
         print("Uploading file...")
         if 'username' not in session:
@@ -214,7 +162,25 @@ def upload_file():
         if file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
 
-        filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename) 
+
+      # -----insert report info to database---------------------------------------------------------------------------------------------------------
+        conn = db_connection()
+        cur = conn.cursor()
+        user_id = session['user_id']
+        try:
+            cur.execute("INSERT INTO report (title, user_id) VALUES (%s, %s)", (filename, user_id))
+            conn.commit()
+            print("file uploaded to database")
+        except mysql.connector.Error as err:
+            flash('Invalid credentials, please try again.', 'error')
+        finally:
+            cur.execute("SELECT report_id from report WHERE title = %s and user_id = %s  ORDER BY report_id DESC LIMIT 1", (filename, user_id) ) # give most recent entre
+            reportID = cur.fetchone()
+            session['report_id'] = reportID[0]  # type: ignore
+            cur.close()
+            conn.close()
+      # -------------------------------------------------------------------------------------------------------------------------------
         file.save(filename)
 
     except Exception as e:
@@ -222,34 +188,36 @@ def upload_file():
         print(f"Error during file upload: {e}")
         return jsonify({'error': 'An error occurred during file processing.'}), 500
 
+    finally:
     # Extract CVEs from the file
-    cves = extract_cves(filename)
-    categorized_cves = categorize_cves(cves)
+      cves = extract_cves(filename)
+      categorized_cves = categorize_cves(cves)
 
-    #print("extracting vuls")
+      #print("extracting vuls")
 
-    vuls = []
-    for cve in cves:
-        newVel = vulTemplete
-        newVel['cve'] = cve
-        vuls.append(newVel)
+      vuls = []
+      for cve in cves:
+          newVel = vulTemplete
+          newVel['cve'] = cve
+          vuls.append(newVel)
 
-    print(f"getting infomation for {len(vuls)} vulnerabilities")
-    vuls = extractVulnerabilities(vuls)
-
-
-    print(vuls)
-    print("Finished Extracted")
-        # print(vuls)
-
-        # Store vulnerabilities in the database
-    store_in_database(vuls)
+      print(f"getting infomation for {len(vuls)} vulnerabilities")
+      vuls = extractVulnerabilities(vuls)
 
 
-        # Get ChatGPT analysis of the CVEs
-        # analysis = get_chatgpt_analysis(cves)
-    #return json.dumps(vuls, indent=2)
-    return jsonify({'cves': categorized_cves, 'analysis': json.dumps(vuls,indent=2)})
+      print(vuls)
+      print("Finished Extracted")
+          # print(vuls)
+
+          # Store vulnerabilities in the database
+      store_in_database(vuls)
+
+      # link_recent_vulnerabilities(vul_count)
+
+          # Get ChatGPT analysis of the CVEs
+          # analysis = get_chatgpt_analysis(cves)
+      #return json.dumps(vuls, indent=2)
+      return jsonify({'cves': categorized_cves, 'analysis': json.dumps(vuls,indent=2)})
 
 
 # Function to extract CVEs from PDF or text file
@@ -284,6 +252,7 @@ def categorize_cves(cves):
         })
     return categorized
 
+
 # Function to store parsed vulnerabilities in the database
 def store_in_database(vuls):
     conn = db_connection()
@@ -292,6 +261,7 @@ def store_in_database(vuls):
     # if not list (only one vul) make it a list of length 1 so it works with the for loop
     if not isinstance(vuls, list):
         vuls = [vuls]
+    
     try:
       for vul in vuls:
           sqlStatement = f'''
@@ -301,13 +271,23 @@ def store_in_database(vuls):
           print(sqlStatement)
           cur.execute(sqlStatement, )
           conn.commit()
+
+  # -----link between report file and its vulnerability-------------------------------------------------------------------------------------------
+          cur.execute("SELECT vulnerability_id FROM vulnerability ORDER BY vulnerability_id DESC LIMIT 1")
+          vID = cur.fetchone()
+          vulnID = vID[0] # type: ignore
+          cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
+          conn.commit()
+  # ------------------------------------------------------------------------------------------------------------------------
+
       print("added vulnerabilities to database")
+      return len(vuls)
     except Exception as e:
         print(f"Could not upload to database, Error: {e}")
 
-
-    cur.close()
-    conn.close()
+    finally:
+      cur.close()
+      conn.close()
 
 @DeprecationWarning
 # Function to get ChatGPT analysis of CVEs
@@ -349,8 +329,6 @@ def get_chatgpt_analysis(cves):
 #     }
 
 
-
-
 def extractVulnerabilities(vulnerabilities):
     #vulnerabilities = []
 
@@ -390,31 +368,29 @@ def extractVulnerabilities(vulnerabilities):
    # vulnerabilities_text = response['choices'][0]['message']['content']
    # vulnerabilities = vulnerabilities_text.strip().split('\n')
 
-
-
-
-    
 # Route to fetch vulnerabilities by report_id
 
-@app.route('/report/<int:report_id>', methods=['GET'])
-def get_vulnerabilities(report_id):
+@app.route('/report', methods=['GET'])
+def get_vulnerabilities():
     conn = db_connection()
     cursor = conn.cursor()
 
     # this shit is complicated
-    query = """
-    SELECT v.name, v.severity, v.description, v.cve, v.systems, v.skill, v.parties, v.low_cost, v.high_cost
-    FROM report_vulnerability rv
-    JOIN report r ON rv.report_id = r.report_id
-    JOIN vulnerability v ON rv.vulnerability_id = v.vulnerability_id
-    WHERE r.report_id = %s;
-    """
+    # query = """
+    # SELECT v.name, v.severity, v.description, v.cve, v.systems, v.skill, v.parties, v.low_cost, v.high_cost
+    # FROM report_vulnerability rv
+    # JOIN report r ON rv.report_id = r.report_id
+    # JOIN vulnerability v ON rv.vulnerability_id = v.vulnerability_id
+    # WHERE r.report_id = %s;
+    # """
 
     #I made the query really simple and it kinda just works
-    simpleQuery = "SELECT * FROM vulnerability"
-    cursor.execute(simpleQuery)
+    #change the query so select all vulnerability with the right report ID (might not work)
+    #simpleQuery = "SELECT * FROM vulnerability"
+    reportID = session['report_id']
+    simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
+    cursor.execute(simpleQuery,(reportID))
     vulnerabilities = cursor.fetchall()
-
     # Format data as JSON
     formatted_data = [
         {
@@ -437,7 +413,7 @@ def get_vulnerabilities(report_id):
     return formatted_data
 @app.route('/logout')
 def logout():
-    session.pop('username', None)
+    session.clear()
     flash('You have been logged out.', 'success')
     return redirect(url_for('index'))
 
