@@ -7,6 +7,7 @@ from openai import OpenAI
 
 from dotenv import load_dotenv  # New import to load environment variables
 
+import mysql.connector
 import logging
 import json
 import ast
@@ -42,6 +43,15 @@ vulTemplete = {
     "profession_needed":""
 }
 
+@DeprecationWarning
+def get_db_connection():
+    conn = mysql.connector.connect(
+        host="your-aws-rds-endpoint",
+        user="your_db_user",
+        password="your_password",
+        database="your_db_name"
+    )
+    return conn
 # Path to store uploaded files
 UPLOAD_FOLDER = './uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -69,11 +79,9 @@ def db_connection():
 def home():
     return redirect(url_for('index'))
 
-#comment out login and change the redirct function to index this way we only have 1 login function 
-# created session for user ID
+#moved all of the login() code to index() and it kinda just works
 @app.route('/index', methods=['GET', 'POST'])
 def index():
-    
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
@@ -86,17 +94,15 @@ def index():
             user = cur.fetchone()
             if user is None:
                 flash('Invalid credentials, please try again.', 'error')
-                return redirect(url_for('index'))
+                return redirect(url_for('login'))
             else:
-                session['username'] = user[1]  # type: ignore 
-                session['user_id'] = user[0] # type: ignore
-
+                session['username'] = user[2]  # type: ignore
                 flash('Login successful!', 'success')
                 return redirect(url_for('dashboard'))
 
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('login'))
 
         finally:
             cur.close()
@@ -119,7 +125,7 @@ def register():
         
         cur.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)', (first, last, email, password))
         conn.commit()
-        return redirect(url_for('index'))
+        return redirect(url_for('login'))
       
       except mysql.connector.Error as err: 
         flash('An error has been detected; this email might have been used')
@@ -251,7 +257,7 @@ def categorize_cves(cves):
 def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
-    report_id = session['report_id']
+
     # if not list (only one vul) make it a list of length 1 so it works with the for loop
     if not isinstance(vuls, list):
         vuls = [vuls]
