@@ -94,15 +94,16 @@ def index():
             user = cur.fetchone()
             if user is None:
                 flash('Invalid credentials, please try again.', 'error')
-                return redirect(url_for('login'))
+                return redirect(url_for('index'))
             else:
                 session['username'] = user[2]  # type: ignore
+                session['user_id'] = user[0]
                 flash('Login successful!', 'success')
                 return redirect(url_for('dashboard'))
 
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
+            return redirect(url_for('index'))
 
         finally:
             cur.close()
@@ -257,6 +258,7 @@ def categorize_cves(cves):
 def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
+    report_id = session['report_id']
 
     # if not list (only one vul) make it a list of length 1 so it works with the for loop
     if not isinstance(vuls, list):
@@ -268,7 +270,7 @@ def store_in_database(vuls):
               INSERT INTO vulnerability (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
               VALUES ("{vul['cve']}", "{vul['description']}", "{vul['date_found']}", "{vul['systems_affected']}", "{vul['severity_rating']}", "{vul['remediation_plan']}", "{vul['cost_estimate']}", "{vul['profession_needed']}")
           '''
-          print(sqlStatement)
+          # print(sqlStatement)
           cur.execute(sqlStatement, )
           conn.commit()
 
