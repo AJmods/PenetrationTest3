@@ -1,17 +1,21 @@
 import os, re, mysql.connector
+from http.client import responses
 
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
 from openai import OpenAI
 
 from dotenv import load_dotenv  # New import to load environment variables
-import mysql.connector
 
+import mysql.connector
+import logging
+import json
+import ast
 # Load environment variables from .env file
 load_dotenv()  # New line to load environment variables
 
 # Access the API key from the environment variable
-openai_api_key = "sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e"  # Fetch API key from environment
+openai_api_key = "sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e" # Fetch API key from environment
 
 # Check if the API key is present
 if not openai_api_key:
@@ -23,6 +27,23 @@ client = OpenAI(api_key=openai_api_key)  # Use the environment variable API key
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
+gunicorn_error_logger = logging.getLogger('gunicorn.error')
+app.logger.handlers.extend(gunicorn_error_logger.handlers)
+app.logger.setLevel(logging.DEBUG)
+app.logger.debug('Logging works')
+
+vulTemplete = {
+    "cve":"",
+    "description":"",
+    "date_found":"",
+    "systems_affected":"",
+    "severity_rating":"",
+    "remediation_plan":"",
+    "cost_estimate":"",
+    "profession_needed":""
+}
+
+@DeprecationWarning
 def get_db_connection():
     conn = mysql.connector.connect(
         host="your-aws-rds-endpoint",
@@ -41,12 +62,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Regex to match CVE patterns
 CVE_REGEX = r'CVE-\d{4}-\d{4,7}'
 
-# Dummy user data for login validation
-users = {
-    "admin": "Newsy",
-    "user": "123"
-}
-
 # config to connect database
 db_config = {
     'user': 'ipro_admin',
@@ -64,45 +79,63 @@ def db_connection():
 def home():
     return redirect(url_for('index'))
 
+#moved all of the login() code to index() and it kinda just works
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
 
-        if username in users and users[username] == password:
-            session['username'] = username
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
-        else:
+        conn = db_connection()
+        cur = conn.cursor()
+
+        try:
+            cur.execute("SELECT * from users WHERE email = %s and password = %s", [email, password])
+            user = cur.fetchone()
+            if user is None:
+                flash('Invalid credentials, please try again.', 'error')
+                return redirect(url_for('index'))
+            else:
+                session['username'] = user[2]  # type: ignore
+                flash('Login successful!', 'success')
+                return redirect(url_for('dashboard'))
+
+        except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
+            return redirect(url_for('login'))
+
+        finally:
+            cur.close()
+            conn.close()
 
     return render_template('index.html')
 
-
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET','POST'])
 def register():
-    first = request.form.get('First')
-    last = request.form.get('Last')
-    email = request.form.get('Email')
-    password = request.form.get('Password')
+    if request.method == 'POST':
+      first = request.form.get('First')
+      last = request.form.get('Last')
+      email = request.form.get('Email')
+      password = request.form.get('Password')
 
-    conn = db_connection()
-    curr = conn.cursor()
-    try:
-        curr.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)',
-                     (first, last, email, password))
+      conn = db_connection()
+      cur = conn.cursor()
+
+      try:
+        
+        cur.execute('INSERT INTO users (first_name, last_name, email, password) VALUES (%s, %s, %s, %s)', (first, last, email, password))
         conn.commit()
-        flash('Welcome to Zebra!')
-        return redirect(url_for('index'))
-    except mysql.connector.Error as err:
-        flash('An error has been detected; this email might have been used or format is incorrect')
-        return render_template("signup.html")
-
-    finally:
-        curr.close()
+        return redirect(url_for('login'))
+      
+      except mysql.connector.Error as err: 
+        flash('An error has been detected; this email might have been used')
+        return redirect(url_for('register')) 
+      
+      finally:
+        cur.close()
         conn.close()
-
+      
+    return render_template('signup.html')
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
@@ -116,6 +149,7 @@ from flask import jsonify
 
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
+    filename = None
     try:
         print("Uploading file...")
         if 'username' not in session:
@@ -128,30 +162,62 @@ def upload_file():
         if file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
 
-        filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename) 
+
+      # -----insert report info to database---------------------------------------------------------------------------------------------------------
+        conn = db_connection()
+        cur = conn.cursor()
+        user_id = session['user_id']
+        try:
+            cur.execute("INSERT INTO report (title, user_id) VALUES (%s, %s)", (filename, user_id))
+            conn.commit()
+            print("file uploaded to database")
+        except mysql.connector.Error as err:
+            flash('Invalid credentials, please try again.', 'error')
+        finally:
+            cur.execute("SELECT report_id from report WHERE title = %s and user_id = %s  ORDER BY report_id DESC LIMIT 1", (filename, user_id) ) # give most recent entre
+            reportID = cur.fetchone()
+            session['report_id'] = reportID[0]  # type: ignore
+            cur.close()
+            conn.close()
+      # -------------------------------------------------------------------------------------------------------------------------------
         file.save(filename)
-
-        # Extract CVEs from the file
-        cves = extract_cves(filename)
-        categorized_cves = categorize_cves(cves)
-
-        print("extracting vuls")
-
-        #vuls = extractVulnerabilities(filename)
-       # print(vuls)
-
-        # Store vulnerabilities in the database
-        #store_in_database(categorized_cves)
-
-        # Get ChatGPT analysis of the CVEs
-        analysis = get_chatgpt_analysis(cves)
-
-        return jsonify({'cves': categorized_cves, 'analysis': analysis})
 
     except Exception as e:
         # Log the error and return a JSON error response
         print(f"Error during file upload: {e}")
         return jsonify({'error': 'An error occurred during file processing.'}), 500
+
+    finally:
+    # Extract CVEs from the file
+      cves = extract_cves(filename)
+      categorized_cves = categorize_cves(cves)
+
+      #print("extracting vuls")
+
+      vuls = []
+      for cve in cves:
+          newVel = vulTemplete
+          newVel['cve'] = cve
+          vuls.append(newVel)
+
+      print(f"getting information for {len(vuls)} vulnerabilities")
+      vuls = extractVulnerabilities(vuls)
+
+
+      print(vuls)
+      print("Finished Extracted")
+          # print(vuls)
+
+          # Store vulnerabilities in the database
+      store_in_database(vuls)
+
+      # link_recent_vulnerabilities(vul_count)
+
+          # Get ChatGPT analysis of the CVEs
+          # analysis = get_chatgpt_analysis(cves)
+      #return json.dumps(vuls, indent=2)
+      return jsonify({'cves': categorized_cves, 'vuls': vuls})
 
 
 # Function to extract CVEs from PDF or text file
@@ -186,25 +252,44 @@ def categorize_cves(cves):
         })
     return categorized
 
+
 # Function to store parsed vulnerabilities in the database
-def store_in_database(cves):
+def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
 
+    # if not list (only one vul) make it a list of length 1 so it works with the for loop
+    if not isinstance(vuls, list):
+        vuls = [vuls]
+    
     try:
-      for cve in cves:
-          cur.execute('''
+      for vul in vuls:
+          sqlStatement = f'''
               INSERT INTO vulnerability (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ''', (cve['id'], cve['description'], None, None, None, None, None, None))
+              VALUES ("{vul['cve']}", "{vul['description']}", "{vul['date_found']}", "{vul['systems_affected']}", "{vul['severity_rating']}", "{vul['remediation_plan']}", "{vul['cost_estimate']}", "{vul['profession_needed']}")
+          '''
+          print(sqlStatement)
+          cur.execute(sqlStatement, )
           conn.commit()
-    except:
-        print("place holder")
 
+  # -----link between report file and its vulnerability-------------------------------------------------------------------------------------------
+          cur.execute("SELECT vulnerability_id FROM vulnerability ORDER BY vulnerability_id DESC LIMIT 1")
+          vID = cur.fetchone()
+          vulnID = vID[0] # type: ignore
+          cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
+          conn.commit()
+  # ------------------------------------------------------------------------------------------------------------------------
 
-    cur.close()
-    conn.close()
+      print("added vulnerabilities to database")
+      return len(vuls)
+    except Exception as e:
+        print(f"Could not upload to database, Error: {e}")
 
+    finally:
+      cur.close()
+      conn.close()
+
+@DeprecationWarning
 # Function to get ChatGPT analysis of CVEs
 def get_chatgpt_analysis(cves):
     if not cves:
@@ -222,7 +307,7 @@ def get_chatgpt_analysis(cves):
     )
     cve_analysis_array = response.choices[0].message.content.split('\n')
 
-    ##return cve_analysis_array
+    return cve_analysis_array
 
 # cve_data_list = []
 
@@ -244,62 +329,68 @@ def get_chatgpt_analysis(cves):
 #     }
 
 
-
-def extractVulnerabilities(filepath):
-    vulnerabilities = []
+def extractVulnerabilities(vulnerabilities):
+    #vulnerabilities = []
 
     # Open and read the PDF file
-    report_text = extract_from_pdf(filepath) if filepath.endswith('.pdf') else extract_from_txt(filepath)
+    #report_text = extract_from_pdf(filepath) if filepath.endswith('.pdf') else extract_from_txt(filepath)
 
-    # Prepare the messages for GPT-4 chat format
-    messages = [
-        {"role": "system",
-         "content": 'You are a cybersecurity assistant. Your task is to extract all vulnerabilities from a given PenTest report in this JSON Format:  {\n' 
-            '"name": STRING,\n' +
-            '"severity": STRING,\n' +
-            '"description": STRING,\n' +
-            # '"cve": STRING,\n' +
-            '"systems": STRING,\n' +
-            '"skill": STRING,\n' +
-            '"parties": STRING,\n' +
-            '"low_cost": STRING,\n' +
-            '"high_cost": STRING,\n' +
-        '}\n' +
-         'Each row in the JSON must only contain one word.  The exception is description; this row is allowed to have at most 20 words.  '
-         },
-        {"role": "user",
-         "content": f"Here is the PenTest report:\n\n{report_text}\n\nPlease extract and list all vulnerabilities."}
-    ]
+    OpenAI_Responses = []
+   # vulnerabilities = vulnerabilities[0:2] #reduce list entries for testing purposes
+    for vul in vulnerabilities:
+        # Prepare the messages for GPT-4 chat format
+        messages = [
+            {"role": "system",
+             "content": 'You are a cybersecurity assistant'
+             #json.dumps(vul)
+             },
+            {"role": "user",
+             "content": f"Here is a JSON of a vulnerability:\n\n{json.dumps(vul)}\n\nPlease fill in the empty rows.  Please do not add extra test outside of the JSON"}
+        ]
 
-    # Use OpenAI's ChatCompletion API to extract vulnerabilities
-    response = client.chat.completions.create(
-        model="gpt-4",  # Use the appropriate model
-        messages=messages,
-        max_tokens=1500,  # Adjust based on report size
-        temperature=0.3
-    )
+      #  print(messages)
 
-    vulnerabilities_text = response['choices'][0]['message']['content']
+        # Use OpenAI's ChatCompletion API to extract vulnerabilities
+        response = client.chat.completions.create(
+            model="gpt-4",  # Use the appropriate model
+            messages=messages,
+            max_tokens=1500,  # Adjust based on report size
+            temperature=0.3
+        )
+       # print(response.choices[0].message.content)
+        vulDict = ast.literal_eval(response.choices[0].message.content)
+     #   print(vulDict)
+        OpenAI_Responses.append(vulDict)
+        #OpenAI_Responses.append(response.choices[0].message.content)
+
+    return OpenAI_Responses
+
+   # vulnerabilities_text = response['choices'][0]['message']['content']
    # vulnerabilities = vulnerabilities_text.strip().split('\n')
 
-    return response.choices[0].message.content
-    
 # Route to fetch vulnerabilities by report_id
-@app.route('/report/<int:report_id>', methods=['GET'])
-def get_vulnerabilities(report_id):
-    conn = get_db_connection()
+
+@app.route('/report', methods=['GET'])
+def get_vulnerabilities():
+    conn = db_connection()
     cursor = conn.cursor()
 
-    query = """
-    SELECT v.name, v.severity, v.description, v.cve, v.systems, v.skill, v.parties, v.low_cost, v.high_cost
-    FROM report_vulnerability rv
-    JOIN report r ON rv.report_id = r.report_id
-    JOIN vulnerability v ON rv.vulnerability_id = v.vulnerability_id
-    WHERE r.report_id = %s;
-    """
-    cursor.execute(query, (report_id,))
-    vulnerabilities = cursor.fetchall()
+    # this shit is complicated
+    # query = """
+    # SELECT v.name, v.severity, v.description, v.cve, v.systems, v.skill, v.parties, v.low_cost, v.high_cost
+    # FROM report_vulnerability rv
+    # JOIN report r ON rv.report_id = r.report_id
+    # JOIN vulnerability v ON rv.vulnerability_id = v.vulnerability_id
+    # WHERE r.report_id = %s;
+    # """
 
+    #I made the query really simple and it kinda just works
+    #change the query so select all vulnerability with the right report ID (might not work)
+    #simpleQuery = "SELECT * FROM vulnerability"
+    reportID = session['report_id']
+    simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
+    cursor.execute(simpleQuery,(reportID,))
+    vulnerabilities = cursor.fetchall()
     # Format data as JSON
     formatted_data = [
         {
@@ -320,10 +411,9 @@ def get_vulnerabilities(report_id):
     conn.close()
 
     return jsonify(formatted_data)
-
 @app.route('/logout')
 def logout():
-    session.pop('username', None)
+    session.clear()
     flash('You have been logged out.', 'success')
     return redirect(url_for('index'))
 
@@ -340,25 +430,6 @@ def history():
         flash('You are not logged in.', 'error')
         return redirect(url_for('index'))
     return render_template('history.html')
-
-@app.route('/report', methods=['GET'])
-def get_report():
-    conn = db_connection()
-    cur = conn.cursor(dictionary=True)
-    try:
-        cur.execute('SELECT * FROM vulnerability WHERE report_id = %s', (1,))
-        vulnerabilities = cur.fetchall()
-        if vulnerabilities:
-            return jsonify(vulnerabilities)
-        else:
-            return jsonify({'message': 'No report found with that ID'}), 404
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-        return jsonify({'error': 'Database error occurred'}), 500
-    finally:
-        cur.close()
-        conn.close()
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
