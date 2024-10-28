@@ -1,5 +1,6 @@
 import os, re, mysql.connector
 from http.client import responses
+from traceback import print_tb
 
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
@@ -15,7 +16,8 @@ import ast
 load_dotenv()  # New line to load environment variables
 
 # Access the API key from the environment variable
-openai_api_key = "sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e" # Fetch API key from environment
+
+openai_api_key = os.getenv("OPEN_API_KEY")
 
 # Check if the API key is present
 if not openai_api_key:
@@ -97,12 +99,14 @@ def index():
                 return redirect(url_for('index'))
             else:
                 session['username'] = user[2]  # type: ignore
+                session['user_id'] = user[0]
                 flash('Login successful!', 'success')
                 return redirect(url_for('dashboard'))
 
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
-            return redirect(url_for('login'))
+
+            return redirect(url_for('index'))
 
         finally:
             cur.close()
@@ -193,19 +197,20 @@ def upload_file():
       cves = extract_cves(filename)
       categorized_cves = categorize_cves(cves)
 
-      #print("extracting vuls")
+      print(f"using these CVES: {cves}")
 
       vuls = []
       for cve in cves:
-          newVel = vulTemplete
+          newVel = vulTemplete.copy()
           newVel['cve'] = cve
           vuls.append(newVel)
 
-      print(f"getting information for {len(vuls)} vulnerabilities")
+      print(f"getting infomation for {len(vuls)} vulnerabilities")
+      # print(vuls)
       vuls = extractVulnerabilities(vuls)
 
 
-      print(vuls)
+     #  print(vuls)
       print("Finished Extracted")
           # print(vuls)
 
@@ -217,7 +222,11 @@ def upload_file():
           # Get ChatGPT analysis of the CVEs
           # analysis = get_chatgpt_analysis(cves)
       #return json.dumps(vuls, indent=2)
-      return jsonify({'cves': categorized_cves, 'vuls': vuls})
+      #return
+    vulJson = jsonify({'cves': categorized_cves, 'analysis': json.dumps(get_vulnerabilities(),indent=2)})
+    #json.dumps(get_vulnerabilities(),indent=2)
+    print(str(vulJson))
+    return vulJson
 
 
 # Function to extract CVEs from PDF or text file
@@ -229,6 +238,8 @@ def extract_cves(filepath):
     cves = re.findall(CVE_REGEX, text)
 
     # Return unique CVEs
+
+    # print(f"found CVES {cves}")
     return list(set(cves))
 
 # Function to extract text from PDF
@@ -257,6 +268,7 @@ def categorize_cves(cves):
 def store_in_database(vuls):
     conn = db_connection()
     cur = conn.cursor()
+    report_id = session['report_id']
 
     # if not list (only one vul) make it a list of length 1 so it works with the for loop
     if not isinstance(vuls, list):
@@ -268,7 +280,7 @@ def store_in_database(vuls):
               INSERT INTO vulnerability (cve, description, date_found, systems_affected, severity_rating, remediation_plan, cost_estimate, profession_needed)
               VALUES ("{vul['cve']}", "{vul['description']}", "{vul['date_found']}", "{vul['systems_affected']}", "{vul['severity_rating']}", "{vul['remediation_plan']}", "{vul['cost_estimate']}", "{vul['profession_needed']}")
           '''
-          print(sqlStatement)
+          # print(sqlStatement)
           cur.execute(sqlStatement, )
           conn.commit()
 
@@ -278,6 +290,8 @@ def store_in_database(vuls):
           vulnID = vID[0] # type: ignore
           cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
           conn.commit()
+
+          print(f"Connected vul_id {vulnID} to report id {report_id}, CVE: {vul['cve']}")
   # ------------------------------------------------------------------------------------------------------------------------
 
       print("added vulnerabilities to database")
@@ -387,9 +401,10 @@ def get_vulnerabilities():
     #I made the query really simple and it kinda just works
     #change the query so select all vulnerability with the right report ID (might not work)
     #simpleQuery = "SELECT * FROM vulnerability"
-    reportID = session['report_id']
+
+    reportID = [session['report_id']]
     simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
-    cursor.execute(simpleQuery,(reportID,))
+    cursor.execute(simpleQuery, reportID)
     vulnerabilities = cursor.fetchall()
     # Format data as JSON
     formatted_data = [
@@ -410,7 +425,10 @@ def get_vulnerabilities():
     cursor.close()
     conn.close()
 
-    return jsonify(formatted_data)
+
+    print(f'formated data {formatted_data}')
+
+    return formatted_data
 @app.route('/logout')
 def logout():
     session.clear()
