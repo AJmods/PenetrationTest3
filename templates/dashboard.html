@@ -32,7 +32,7 @@
             <div id="progress-bar">
                 <div id="progress-fill"></div>
             </div>
-            <p id="time-remaining"></p>
+            
         </div>
     </section>
 
@@ -80,16 +80,16 @@
             const xhr = new XMLHttpRequest();
             xhr.open("POST", uploadForm.action, true);
 
-            xhr.upload.onprogress = function (event) {
-                const percentComplete = Math.round((event.loaded / event.total) * 100);
-                progressFill.style.width = percentComplete + "%";
+            //xhr.upload.onprogress = function (event) {
+              //  const percentComplete = Math.round((event.loaded / event.total) * 100);
+                //progressFill.style.width = percentComplete + "%";
 
                 // Calculate remaining time
-                const elapsedTime = (new Date().getTime() - startTime) / 1000;
-                const uploadSpeed = event.loaded / elapsedTime;
-                const remainingTime = (totalSize - event.loaded) / uploadSpeed;
-                timeRemaining.textContent = `Time remaining: ${Math.round(remainingTime)} seconds`;
-            };
+                //const elapsedTime = (new Date().getTime() - startTime) / 1000;
+                //const uploadSpeed = event.loaded / elapsedTime;
+                //const remainingTime = (totalSize - event.loaded) / uploadSpeed;
+               // timeRemaining.textContent = `Time remaining: ${Math.round(remainingTime)} seconds`;
+            //};
 
             xhr.onload = function () {
                 if (xhr.status === 200) {
