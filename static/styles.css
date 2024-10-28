@@ -162,3 +162,23 @@ header {
   background-color: #0056b3; 
 }
 
+.cve-results {
+    display: none; /* Initially hidden */
+    background-color: #e6f7ff; /* Optional: light blue background */
+    padding: 1em; /* Optional: padding */
+    border: 1px solid #ccc; /* Optional: border */
+    margin-top: 1em;
+}
+
+.cve-results h2 {
+    color: #d9534f; /* Optional: red color for heading */
+}
+
+.cve-results ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.cve-results li {
+    padding: 0.5em 0;
+}
