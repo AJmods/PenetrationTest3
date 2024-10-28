@@ -182,6 +182,7 @@ def upload_file():
             cur.execute("SELECT report_id from report WHERE title = %s and user_id = %s  ORDER BY report_id DESC LIMIT 1", (filename, user_id) ) # give most recent entre
             reportID = cur.fetchone()
             session['report_id'] = reportID[0]  # type: ignore
+            print("Session report_id set to:", session['report_id'])  # Debugging print to confirm
             cur.close()
             conn.close()
       # -------------------------------------------------------------------------------------------------------------------------------
@@ -205,9 +206,11 @@ def upload_file():
           newVel['cve'] = cve
           vuls.append(newVel)
 
-      print(f"getting infomation for {len(vuls)} vulnerabilities")
+      print(f"Getting infomation for {len(vuls)} vulnerabilities")
       # print(vuls)
       vuls = extractVulnerabilities(vuls)
+      
+
 
 
      #  print(vuls)
@@ -217,16 +220,13 @@ def upload_file():
           # Store vulnerabilities in the database
       store_in_database(vuls)
 
-      # link_recent_vulnerabilities(vul_count)
+      response_data = {
+         "cves": categorized_cves,
+         "vuls": vuls 
+      }
+    print("Sending JSON response:", response_data)
+    return jsonify(response_data)
 
-          # Get ChatGPT analysis of the CVEs
-          # analysis = get_chatgpt_analysis(cves)
-      #return json.dumps(vuls, indent=2)
-      #return
-    vulJson = jsonify({'cves': categorized_cves, 'analysis': json.dumps(get_vulnerabilities(),indent=2)})
-    #json.dumps(get_vulnerabilities(),indent=2)
-    print(str(vulJson))
-    return vulJson
 
 
 # Function to extract CVEs from PDF or text file
@@ -409,15 +409,14 @@ def get_vulnerabilities():
     # Format data as JSON
     formatted_data = [
         {
-            "name": row[0],
-            "severity": row[1],
+            "cve": row[1],
             "description": row[2],
-            "cve": row[3],
-            "systems": row[4],
-            "skill": row[5],
-            "parties": row[6],
-            "low_cost": row[7],
-            "high_cost": row[8],
+            "date_found": row[3],
+            "systems_affected": row[4],
+            "severity_rating": row[5],
+            "remediation_plan": row[6],
+            "cost_estimate": row[7],
+            "profession_needed": row[8],
         }
         for row in vulnerabilities
     ]
@@ -426,9 +425,9 @@ def get_vulnerabilities():
     conn.close()
 
 
-    print(f'formated data {formatted_data}')
+    print('Formated data {formatted_data}')
 
-    return formatted_data
+    return jsonify({"vuls": formatted_data})
 @app.route('/logout')
 def logout():
     session.clear()
