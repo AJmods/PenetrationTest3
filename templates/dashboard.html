@@ -43,28 +43,30 @@
     </section>
 
     <!-- Vulnerabilities Section -->
-    <section id="vulnerabilities" style="display: none;"></section>
+    <section id="vulnerabilities" style="display: none;">
+        <h2>Identified Vulnerabilities</h2>
+    </section>
 
     <script>
-        let uploadForm = document.getElementById("upload-form");
-        let uploadBtn = document.getElementById("uploadBtn");
-        let progressContainer = document.getElementById("progress-container");
-        let progressFill = document.getElementById("progress-fill");
-        let timeRemaining = document.getElementById("time-remaining");
-        let cveResultsSection = document.querySelector('.cve-results');
-
+        const uploadForm = document.getElementById("upload-form");
+        const uploadBtn = document.getElementById("uploadBtn");
+        const progressContainer = document.getElementById("progress-container");
+        const progressFill = document.getElementById("progress-fill");
+        const timeRemaining = document.getElementById("time-remaining");
+        const cveResultsSection = document.querySelector('.cve-results');
+        
         let startTime;
         let totalSize;
 
         function handleFiles(files) {
-            uploadBtn.disabled = false;  // Enable button when file is selected
+            uploadBtn.disabled = false;
         }
 
         uploadForm.addEventListener('submit', function (event) {
             event.preventDefault();
             uploadBtn.disabled = true;
 
-            let fileElem = document.getElementById("fileElem").files[0];
+            const fileElem = document.getElementById("fileElem").files[0];
             if (!fileElem) {
                 return;
             }
@@ -72,36 +74,38 @@
             totalSize = fileElem.size;
             startTime = new Date().getTime();
 
-            let formData = new FormData(uploadForm);
+            const formData = new FormData(uploadForm);
             progressContainer.style.display = "block";
 
-            let xhr = new XMLHttpRequest();
+            const xhr = new XMLHttpRequest();
             xhr.open("POST", uploadForm.action, true);
 
             xhr.upload.onprogress = function (event) {
-                let percentComplete = Math.round((event.loaded / event.total) * 100);
+                const percentComplete = Math.round((event.loaded / event.total) * 100);
                 progressFill.style.width = percentComplete + "%";
 
                 // Calculate remaining time
-                let elapsedTime = (new Date().getTime() - startTime) / 1000; // seconds
-                let uploadSpeed = event.loaded / elapsedTime; // bytes per second
-                let remainingTime = (totalSize - event.loaded) / uploadSpeed; // seconds remaining
+                const elapsedTime = (new Date().getTime() - startTime) / 1000;
+                const uploadSpeed = event.loaded / elapsedTime;
+                const remainingTime = (totalSize - event.loaded) / uploadSpeed;
                 timeRemaining.textContent = `Time remaining: ${Math.round(remainingTime)} seconds`;
             };
 
             xhr.onload = function () {
-                progressFill.style.width = "100%";
-                timeRemaining.textContent = "Upload complete!";
-
-                // Try to parse the response as JSON
-                try {
-                    let responseData = JSON.parse(xhr.responseText);
-                    if (responseData.cves) {
-                        displayResults(responseData.cves);
+                if (xhr.status === 200) {
+                    try {
+                        const responseData = JSON.parse(xhr.responseText);
+                        console.log(responseData); 
+                        if (responseData.vuls) {
+                            displayVulnerabilities(responseData.vuls); // Display vulnerabilities
+                        } else {
+                            console.error('No vulnerabilities found in the response');
+                        }
+                    } catch (error) {
+                        console.error('Error parsing response:', error);
                     }
-                } catch (error) {
-                    console.error('Failed to parse JSON response:', error);
-                    timeRemaining.textContent = "Error parsing server response.";
+                } else { 
+                    console.error('Failed with status:', xhr.status);
                 }
             };
 
@@ -112,40 +116,43 @@
             xhr.send(formData);
         });
 
-        function displayResults(cves) {
-            // Show the CVE results section
-            cveResultsSection.style.display = "block";
-            let cveList = document.getElementById('cve-list');
-            cveList.innerHTML = '';
+        function displayVulnerabilities(vuls) {
+            const vulnSection = document.getElementById('vulnerabilities');
+            vulnSection.style.display = 'block';  // Make the vulnerabilities section visible
+            vulnSection.innerHTML = '';  // Clear any previous vulnerabilities
 
-            cves.forEach(function (cve) {
-                cveList.innerHTML += `<li>${cve.id}: ${cve.description} (Category: ${cve.category})</li>`;
+            // Loop through the vulnerabilities and display each one
+            vuls.forEach(function(vul) {
+                vulnSection.innerHTML += `
+                    <div class="vuln-item">
+                        <h3>${vul.cve}</h3>
+                        <p><strong>Description:</strong> ${vul.description}</p>
+                        <p><strong>Date Found:</strong> ${vul.date_found}</p>
+                        <p><strong>Systems Affected:</strong> ${vul.systems_affected}</p>
+                        <p><strong>Severity Rating:</strong> ${vul.severity_rating}</p>
+                        <p><strong>Remediation Plan:</strong> ${vul.remediation_plan}</p>
+                        <p><strong>Cost Estimate:</strong> ${vul.cost_estimate}</p>
+                        <p><strong>Profession Needed:</strong> ${vul.profession_needed}</p>
+                    </div>
+                    <hr />
+                `;
             });
         }
 
-        // Fetch vulnerability data for a report (report ID is hardcoded as 1 for this example)
-        fetch('/report/1')  // Replace 1 with the actual report ID
-            .then(response => response.json())
-            .then(data => {
-                const vulnerabilitiesDiv = document.getElementById('vulnerabilities');
-                data.forEach(vulnerability => {
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.innerHTML = `
-                        <div class="card-header">${vulnerability.cve} - Severity: ${vulnerability.severity}</div>
-                        <div class="card-body">
-                            <p><strong>Name:</strong> ${vulnerability.name}</p>
-                            <p><strong>Description:</strong> ${vulnerability.description}</p>
-                            <p><strong>Risk Estimation:</strong> ${vulnerability.risk_estimation}</p>
-                            <p><strong>Cost to Fix:</strong> ${vulnerability.low_cost} - ${vulnerability.high_cost}</p>
-                            <p><strong>Time to Fix:</strong> ${vulnerability.time_to_fix}</p>
-                        </div>
-                    `;
-                    vulnerabilitiesDiv.appendChild(card);
+        function displayResults(cves) {
+            cveResultsSection.style.display = "block";
+            const cveList = document.getElementById('cve-list');
+            cveList.innerHTML = '';
+
+            if (Array.isArray(cves) && cves.length > 0) {
+                cves.forEach(function (cve) {
+                    cveList.innerHTML += `<li>${cve.cve}: ${cve.description} (Category: ${cve.category})</li>`;
                 });
-                vulnerabilitiesDiv.style.display = 'block'; // Show the vulnerabilities section
-            })
-            .catch(error => console.error('Error fetching vulnerabilities:', error));
+            } else {
+                console.error("CVE data format incorrect or empty:", cves);
+                cveList.innerHTML = '<li>No CVEs found or data format is incorrect.</li>';
+            }
+        }
     </script>
 </body>
 </html>

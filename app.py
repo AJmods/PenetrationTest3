@@ -16,6 +16,7 @@ import ast
 load_dotenv()  # New line to load environment variables
 
 # Access the API key from the environment variable
+
 openai_api_key = os.getenv("OPEN_API_KEY")
 
 # Check if the API key is present
@@ -104,6 +105,7 @@ def index():
 
         except mysql.connector.Error as err:
             flash('Invalid credentials, please try again.', 'error')
+
             return redirect(url_for('index'))
 
         finally:
@@ -236,6 +238,7 @@ def extract_cves(filepath):
     cves = re.findall(CVE_REGEX, text)
 
     # Return unique CVEs
+
     # print(f"found CVES {cves}")
     return list(set(cves))
 
@@ -287,6 +290,7 @@ def store_in_database(vuls):
           vulnID = vID[0] # type: ignore
           cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
           conn.commit()
+
           print(f"Connected vul_id {vulnID} to report id {report_id}, CVE: {vul['cve']}")
   # ------------------------------------------------------------------------------------------------------------------------
 
@@ -397,6 +401,7 @@ def get_vulnerabilities():
     #I made the query really simple and it kinda just works
     #change the query so select all vulnerability with the right report ID (might not work)
     #simpleQuery = "SELECT * FROM vulnerability"
+
     reportID = [session['report_id']]
     simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
     cursor.execute(simpleQuery, reportID)
@@ -419,6 +424,7 @@ def get_vulnerabilities():
 
     cursor.close()
     conn.close()
+
 
     print(f'formated data {formatted_data}')
 
