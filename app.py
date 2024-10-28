@@ -195,19 +195,20 @@ def upload_file():
       cves = extract_cves(filename)
       categorized_cves = categorize_cves(cves)
 
-      #print("extracting vuls")
+      print(f"using these CVES: {cves}")
 
       vuls = []
       for cve in cves:
-          newVel = vulTemplete
+          newVel = vulTemplete.copy()
           newVel['cve'] = cve
           vuls.append(newVel)
 
       print(f"getting infomation for {len(vuls)} vulnerabilities")
+      # print(vuls)
       vuls = extractVulnerabilities(vuls)
 
 
-      print(vuls)
+     #  print(vuls)
       print("Finished Extracted")
           # print(vuls)
 
@@ -235,6 +236,7 @@ def extract_cves(filepath):
     cves = re.findall(CVE_REGEX, text)
 
     # Return unique CVEs
+    # print(f"found CVES {cves}")
     return list(set(cves))
 
 # Function to extract text from PDF
@@ -285,6 +287,7 @@ def store_in_database(vuls):
           vulnID = vID[0] # type: ignore
           cur.execute("INSERT INTO report_vulnerability (report_id,vulnerability_id) VALUES (%s, %s)", (report_id, vulnID)) # type: ignore
           conn.commit()
+          print(f"Connected vul_id {vulnID} to report id {report_id}, CVE: {vul['cve']}")
   # ------------------------------------------------------------------------------------------------------------------------
 
       print("added vulnerabilities to database")
