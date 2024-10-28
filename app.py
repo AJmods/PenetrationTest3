@@ -1,5 +1,6 @@
 import os, re, mysql.connector
 from http.client import responses
+from traceback import print_tb
 
 from flask import Flask, flash, redirect, render_template, request, session, jsonify, url_for
 from pdfminer.high_level import extract_text
@@ -15,7 +16,7 @@ import ast
 load_dotenv()  # New line to load environment variables
 
 # Access the API key from the environment variable
-openai_api_key = "sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e" # Fetch API key from environment
+openai_api_key = os.getenv("OPEN_API_KEY")
 
 # Check if the API key is present
 if not openai_api_key:
@@ -218,7 +219,11 @@ def upload_file():
           # Get ChatGPT analysis of the CVEs
           # analysis = get_chatgpt_analysis(cves)
       #return json.dumps(vuls, indent=2)
-      return jsonify({'cves': categorized_cves, 'analysis': json.dumps(vuls,indent=2)})
+      #return
+    vulJson = jsonify({'cves': categorized_cves, 'analysis': json.dumps(get_vulnerabilities(),indent=2)})
+    #json.dumps(get_vulnerabilities(),indent=2)
+    print(str(vulJson))
+    return vulJson
 
 
 # Function to extract CVEs from PDF or text file
@@ -389,9 +394,9 @@ def get_vulnerabilities():
     #I made the query really simple and it kinda just works
     #change the query so select all vulnerability with the right report ID (might not work)
     #simpleQuery = "SELECT * FROM vulnerability"
-    reportID = session['report_id']
+    reportID = [session['report_id']]
     simpleQuery = "SELECT v.* FROM vulnerability v JOIN report_vulnerability rv ON v.vulnerability_id = rv.vulnerability_id WHERE rv.report_id =%s"
-    cursor.execute(simpleQuery,(reportID))
+    cursor.execute(simpleQuery, reportID)
     vulnerabilities = cursor.fetchall()
     # Format data as JSON
     formatted_data = [
@@ -411,6 +416,8 @@ def get_vulnerabilities():
 
     cursor.close()
     conn.close()
+
+    print(f'formated data {formatted_data}')
 
     return formatted_data
 @app.route('/logout')
