@@ -15,7 +15,7 @@ import ast
 load_dotenv()  # New line to load environment variables
 
 # Access the API key from the environment variable
-openai_api_key = "sk-proj-v4E164DVorsLbQfOQ2aAT3BlbkFJ1H0ycMzav0qdk1s4Ce2e" # Fetch API key from environment
+openai_api_key = os.getenv("OPEN_API_KEY") # Fetch API key from environment
 
 # Check if the API key is present
 if not openai_api_key:
